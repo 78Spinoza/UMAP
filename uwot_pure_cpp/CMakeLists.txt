@@ -26,6 +26,7 @@ set(UWOT_WRAPPER_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/uwot_transform.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/uwot_quantization.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/uwot_distance.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/uwot_crc32.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/lz4.c
 )
 
@@ -141,6 +142,41 @@ if(BUILD_TESTS)
     target_link_libraries(test_quantization_comprehensive uwot_wrapper)
     if(OpenMP_CXX_FOUND)
         target_link_libraries(test_quantization_comprehensive OpenMP::OpenMP_CXX)
+    endif()
+
+    # Debug save/load test
+    add_executable(debug_save_load_test debug_save_load_test.cpp)
+    target_link_libraries(debug_save_load_test uwot_wrapper)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(debug_save_load_test OpenMP::OpenMP_CXX)
+    endif()
+
+    # Zero-norm handling test
+    add_executable(test_zero_norm_handling test_zero_norm_handling.cpp)
+    target_link_libraries(test_zero_norm_handling uwot_wrapper)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(test_zero_norm_handling OpenMP::OpenMP_CXX)
+    endif()
+
+    # ef_search scaling test
+    add_executable(test_ef_search_scaling test_ef_search_scaling.cpp)
+    target_link_libraries(test_ef_search_scaling uwot_wrapper)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(test_ef_search_scaling OpenMP::OpenMP_CXX)
+    endif()
+
+    # Simple ef_search scaling test
+    add_executable(test_ef_scaling_simple test_ef_scaling_simple.cpp)
+    target_link_libraries(test_ef_scaling_simple uwot_wrapper)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(test_ef_scaling_simple OpenMP::OpenMP_CXX)
+    endif()
+
+    # Distance conversion refactoring demo
+    add_executable(refactoring_demo refactoring_demo.cpp)
+    target_link_libraries(refactoring_demo uwot_wrapper)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(refactoring_demo OpenMP::OpenMP_CXX)
     endif()
 endif()
 
