@@ -3,15 +3,9 @@
 ## Overview
 Complete API documentation for the Enhanced UMAP implementation with revolutionary HNSW k-NN optimization, dual HNSW architecture, stream-based serialization, and comprehensive CRC32 validation. This document covers both C++ and C# APIs with comprehensive examples and best practices.
 
-## 🚀 Revolutionary Features in v3.16.0
+## 🚀 Revolutionary Features in v3.15.0
 
-### 🔧 Critical Euclidean Distance Transform Bug Fix
-- **FIXED**: Critical inconsistency between fit and transform operations
-- **Perfect consistency**: Identical training points return exact fitted coordinates
-- **Zero tolerance**: MSE = 0 for pipeline consistency (fit → transform → save → load → transform)
-- **Production impact**: Fixes core UMAP algorithm reliability
-
-### Stream-Based HNSW Serialization with CRC32 Validation (v3.15.0)
+### Stream-Based HNSW Serialization with CRC32 Validation
 - **Zero temporary files**: Direct memory-to-file operations
 - **Automatic corruption detection**: CRC32 validation for both HNSW indices
 - **Deployment-grade reliability**: Production-ready model persistence
@@ -56,13 +50,23 @@ public float[,] Fit(float[,] data,
                     int nEpochs = 300,
                     DistanceMetric metric = DistanceMetric.Euclidean,
                     bool forceExactKnn = false,
-                    bool useQuantization = false)    // NEW v3.13.0
+                    int hnswM = -1,
+                    int hnswEfConstruction = -1,
+                    int hnswEfSearch = -1,
+                    bool useQuantization = false,
+                    int randomSeed = -1,
+                    bool autoHNSWParam = true)
 ```
 
 **Enhanced Parameters:**
 - `spread`: Smart scale parameter (auto-optimized by dimension)
 - `forceExactKnn`: Force exact k-NN instead of HNSW optimization (50-2000x speedup)
-- `useQuantization`: Enable 85-95% file size reduction (NEW v3.13.0)
+- `hnswM`: HNSW graph degree parameter (-1 = auto-select based on dataset size)
+- `hnswEfConstruction`: HNSW build quality parameter (-1 = auto-select)
+- `hnswEfSearch`: HNSW query quality parameter (-1 = auto-select)
+- `useQuantization`: Enable 85-95% file size reduction
+- `randomSeed`: Random seed for reproducible training (-1 = random)
+- `autoHNSWParam`: Automatically optimize HNSW parameters based on data characteristics
 
 **Smart Defaults by Dimension:**
 - **2D**: spread=5.0, minDist=0.35, nNeighbors=25 (optimal for visualization)
@@ -83,10 +87,23 @@ var optimizedEmbedding = model.Fit(data,
     nNeighbors: 30,                  // Good for 20D
     metric: DistanceMetric.Cosine,   // HNSW accelerated
     forceExactKnn: false,            // Enable 50-2000x speedup
-    useQuantization: true);          // Enable 85-95% compression
+    useQuantization: true,           // Enable 85-95% compression
+    randomSeed: 42,                  // Reproducible training
+    autoHNSWParam: true);            // Auto-optimize HNSW parameters
 
-// Force exact computation (for validation/research)
-var exactEmbedding = model.Fit(data, forceExactKnn: true);
+// Force exact computation with reproducible results (for validation/research)
+var exactEmbedding = model.Fit(data,
+    forceExactKnn: true,
+    randomSeed: 12345,
+    autoHNSWParam: false);
+
+// Custom HNSW parameters for specific performance requirements
+var customHNSW = model.Fit(data,
+    embeddingDimension: 2,
+    hnswM: 64,                       // Higher connectivity for better recall
+    hnswEfConstruction: 256,         // Higher build quality
+    hnswEfSearch: 128,               // Higher search quality
+    autoHNSWParam: false);           // Use manual parameters
 ```
 
 #### FitWithProgress() - Training with Enhanced Progress Reporting
@@ -100,7 +117,9 @@ public float[,] FitWithProgress(float[,] data,
                                int nEpochs = 300,
                                DistanceMetric metric = DistanceMetric.Euclidean,
                                bool forceExactKnn = false,
-                               bool useQuantization = false)
+                               bool useQuantization = false,
+                               int randomSeed = -1,
+                               bool autoHNSWParam = true)
 ```
 
 **Enhanced Progress Reporting:**
@@ -126,6 +145,61 @@ var embedding = model.FitWithProgress(data,
     metric: DistanceMetric.Euclidean,
     forceExactKnn: false,      // HNSW optimization enabled
     useQuantization: true);    // Enable compression
+```
+
+### 🆕 Enhanced Training Parameters (v3.16.0)
+
+#### Reproducible Training with Random Seeds
+```csharp
+// Set random seed for reproducible results
+var reproducibleEmbedding = model.Fit(data,
+    randomSeed: 42,                  // Fixed seed for same results every run
+    embeddingDimension: 2,
+    useQuantization: true);
+
+// Random seed (-1) for varied results each run
+var variedEmbedding = model.Fit(data,
+    randomSeed: -1,                  // Default: random initialization
+    embeddingDimension: 2);
+```
+
+#### HNSW Parameter Optimization
+```csharp
+// Automatic HNSW parameter optimization (recommended)
+var autoOptimized = model.Fit(data,
+    autoHNSWParam: true,             // Default: smart parameter selection
+    embeddingDimension: 20);
+
+// Manual HNSW tuning for specific requirements
+var manualTuned = model.Fit(data,
+    hnswM: 48,                       // Graph connectivity (16-64)
+    hnswEfConstruction: 200,         // Build quality (64-400)
+    hnswEfSearch: 100,               // Search quality (32-200)
+    autoHNSWParam: false);           // Override auto-optimization
+```
+
+**Parameter Guidelines:**
+- **`hnswM`**: Higher values = better recall, more memory (16-64, default auto)
+- **`hnswEfConstruction`**: Higher values = better index quality, slower build (64-400, default auto)
+- **`hnswEfSearch`**: Higher values = better search accuracy, slower queries (32-200, default auto)
+- **`randomSeed`**: Fixed seeds ensure reproducible training across runs
+- **`autoHNSWParam`**: When true, automatically selects optimal parameters based on dataset size and characteristics
+
+#### Performance vs. Quality Trade-offs
+```csharp
+// Maximum performance (faster, less accurate)
+var performanceMode = model.Fit(data,
+    hnswM: 16,                       // Minimal connectivity
+    hnswEfConstruction: 64,          // Minimal build quality
+    hnswEfSearch: 32,                // Minimal search quality
+    autoHNSWParam: false);
+
+// Maximum quality (slower, more accurate)
+var qualityMode = model.Fit(data,
+    hnswM: 64,                       // Maximum connectivity
+    hnswEfConstruction: 400,         // Maximum build quality
+    hnswEfSearch: 200,               // Maximum search quality
+    autoHNSWParam: false);
 ```
 
 ### Distance Metrics with HNSW Support
