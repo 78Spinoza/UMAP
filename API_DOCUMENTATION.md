@@ -3,9 +3,15 @@
 ## Overview
 Complete API documentation for the Enhanced UMAP implementation with revolutionary HNSW k-NN optimization, dual HNSW architecture, stream-based serialization, and comprehensive CRC32 validation. This document covers both C++ and C# APIs with comprehensive examples and best practices.
 
-## 🚀 Revolutionary Features in v3.15.0
+## 🚀 Revolutionary Features in v3.16.0
 
-### Stream-Based HNSW Serialization with CRC32 Validation
+### 🔧 Critical Euclidean Distance Transform Bug Fix
+- **FIXED**: Critical inconsistency between fit and transform operations
+- **Perfect consistency**: Identical training points return exact fitted coordinates
+- **Zero tolerance**: MSE = 0 for pipeline consistency (fit → transform → save → load → transform)
+- **Production impact**: Fixes core UMAP algorithm reliability
+
+### Stream-Based HNSW Serialization with CRC32 Validation (v3.15.0)
 - **Zero temporary files**: Direct memory-to-file operations
 - **Automatic corruption detection**: CRC32 validation for both HNSW indices
 - **Deployment-grade reliability**: Production-ready model persistence

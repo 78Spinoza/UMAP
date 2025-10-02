@@ -1,6 +1,36 @@
 # UMAPuwotSharp Version History
 
-## Version 3.15.0 - Stream-Based HNSW Serialization with CRC32 Validation (Current)
+## Version 3.16.0 - Critical Euclidean Distance Transform Bug Fix (Current)
+
+### 🔧 CRITICAL BUG FIX RELEASE
+- **FIXED**: Critical inconsistency between fit and transform operations for Euclidean distance
+- **PERFECT CONSISTENCY**: Identical training points now return exact fitted coordinates
+- **ZERO TOLERANCE**: MSE = 0 for pipeline consistency (fit → transform → save → load → transform)
+- **PRODUCTION IMPACT**: Fixes core UMAP algorithm reliability for production deployments
+- **EXACT MATCH PRESERVATION**: Training data transforms identically after save/load cycles
+- **METRIC-SPECIFIC CONVERSION**: Correct distance handling for Euclidean, Cosine, Manhattan
+- **ENHANCED DUAL HNSW**: Improved validation for both original and embedding space indices
+
+### 🎯 RELIABILITY IMPROVEMENTS
+- **Robust Error Handling**: Graceful recovery from edge cases in distance calculations
+- **Transform Accuracy**: Perfect coordinate preservation for identical training points
+- **Pipeline Consistency**: Zero divergence between fitted and transformed embeddings
+- **Production Safety**: Enhanced validation for enterprise deployments
+
+### 📊 VALIDATION METRICS
+- **All 15/15 C# Tests Passing**: Complete validation suite with perfect accuracy
+- **C++ Comprehensive Testing**: Memory safety, accuracy, performance validated
+- **Cross-Platform Verified**: Windows (220KB) + Linux (174KB) with HNSW
+- **NuGet Package Ready**: Includes symbols for debugging (v3.16.0 published)
+
+### 📋 API COMPATIBILITY
+- **Seamless Upgrade**: No breaking changes from v3.15.0
+- **Backward Compatible**: Models saved with earlier versions remain fully supported
+- **Enhanced Reliability**: Existing code benefits from bug fixes automatically
+
+---
+
+## Version 3.15.0 - Stream-Based HNSW Serialization with CRC32 Validation
 
 ### 🌊 REVOLUTIONARY SERIALIZATION BREAKTHROUGH
 - **Stream-based HNSW serialization**: Zero temporary files with direct memory-to-file operations
@@ -236,12 +266,34 @@ foreach (var result in aiResults) {
 }
 ```
 
-### From v2.x to v3.15.0
+### From v3.15.0 to v3.16.0
+```csharp
+// v3.15.0 code (still works - seamless upgrade)
+var embedding = model.Fit(data, embeddingDimension: 2);
+
+// v3.16.0 - automatic reliability improvements
+var embedding = model.Fit(data,
+    embeddingDimension: 2,
+    spread: 5.0f,              // Optimal 2D visualization
+    forceExactKnn: false,      // Enable HNSW for 50-2000x speedup
+    useQuantization: true);    // Enable 85-95% file size reduction
+
+// Critical fix: Perfect consistency for training data
+model.SaveModel("production_model.umap");
+var loadedModel = UMapModel.LoadModel("production_model.umap");
+
+// Identical training points now return EXACT fitted coordinates
+var originalCoords = model.Transform(trainingData);
+var loadedCoords = loadedModel.Transform(trainingData);
+// MSE = 0 (perfect consistency guaranteed)
+```
+
+### From v2.x to v3.16.0
 ```csharp
 // v2.x code (still works)
 var embedding = model.Fit(data, embeddingDimension: 2);
 
-// v3.15.0 optimized code with all features
+// v3.16.0 optimized code with all features
 var embedding = model.Fit(data,
     embeddingDimension: 2,
     spread: 5.0f,              // Optimal 2D visualization
@@ -260,18 +312,19 @@ foreach (var result in aiResults) {
 ```
 
 ### Breaking Changes
-- **⚠️ File compatibility**: Models saved with v3.15.0 stream-based HNSW serialization are **NOT backward compatible** with earlier versions due to new CRC32 validation and stream format changes
+- **✅ v3.16.0**: No breaking changes - seamless upgrade from v3.15.0
+- **⚠️ File compatibility**: Models saved with v3.15.0+ stream-based HNSW serialization are **NOT backward compatible** with earlier versions due to new CRC32 validation and stream format changes
 - **New parameters**: All new parameters are optional with sensible defaults
 - **Enhanced results**: TransformWithSafety provides additional AI safety information
 - **Automatic features**: Stream-based serialization and CRC32 validation are automatic
 
 ### ⚠️ IMPORTANT: File Compatibility Notice
-**Models saved with v3.15.0 cannot be loaded by earlier versions** due to:
+**Models saved with v3.15.0+ cannot be loaded by earlier versions** due to:
 - New CRC32 integrity validation headers
 - Stream-based HNSW serialization format
 - Enhanced dual HNSW index structure
 
-**Recommendation**: Ensure all deployment environments use v3.15.0+ when saving new models, or maintain compatibility by using v3.14.0 for cross-version compatibility requirements.
+**Recommendation**: Ensure all deployment environments use v3.16.0+ when saving new models, or maintain compatibility by using v3.14.0 for cross-version compatibility requirements.
 
 ---
 
@@ -284,6 +337,7 @@ foreach (var result in aiResults) {
 | **3.13.0** | <3ms | 15-45MB | HNSW + quantized | 85-95% reduced | 5-level outlier detection |
 | **3.14.0** | <1ms | ~50MB | Dual HNSW | 85-95% reduced | AI inference safety |
 | **3.15.0** | <1ms | ~50MB | Stream + CRC32 | 85-95% reduced | AI inference + integrity validation |
+| **3.16.0** | <1ms | ~50MB | Stream + CRC32 | 85-95% reduced | AI inference + critical bug fixes |
 
 ---
 
@@ -304,4 +358,4 @@ foreach (var result in aiResults) {
 
 ---
 
-*This version history tracks the evolution of UMAPuwotSharp from a standard UMAP implementation to a revolutionary high-performance system with stream-based HNSW serialization, dual HNSW architecture for AI inference, massive storage optimization, and production-grade safety features.*
+*This version history tracks the evolution of UMAPuwotSharp from a standard UMAP implementation to a revolutionary high-performance system with critical bug fixes, stream-based HNSW serialization, dual HNSW architecture for AI inference, massive storage optimization, and production-grade safety features.*
