@@ -144,6 +144,13 @@ if(BUILD_TESTS)
         target_link_libraries(test_quantization_comprehensive OpenMP::OpenMP_CXX)
     endif()
 
+    # Debug quantization save/load test
+    add_executable(debug_quantization_simple debug_quantization_simple.cpp)
+    target_link_libraries(debug_quantization_simple uwot_wrapper)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(debug_quantization_simple OpenMP::OpenMP_CXX)
+    endif()
+
     # Debug save/load test
     add_executable(debug_save_load_test debug_save_load_test.cpp)
     target_link_libraries(debug_save_load_test uwot_wrapper)
@@ -177,6 +184,48 @@ if(BUILD_TESTS)
     target_link_libraries(refactoring_demo uwot_wrapper)
     if(OpenMP_CXX_FOUND)
         target_link_libraries(refactoring_demo OpenMP::OpenMP_CXX)
+    endif()
+
+    # Refactoring validation test
+    add_executable(test_refactoring_validation test_refactoring_validation.cpp)
+    target_link_libraries(test_refactoring_validation uwot_wrapper)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(test_refactoring_validation OpenMP::OpenMP_CXX)
+    endif()
+
+    # HNSW embedding extraction optimization test
+    add_executable(test_embedding_extraction_optimization test_embedding_extraction_optimization.cpp)
+    target_link_libraries(test_embedding_extraction_optimization uwot_wrapper)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(test_embedding_extraction_optimization OpenMP::OpenMP_CXX)
+    endif()
+
+    # Distance helper functions test
+    add_executable(test_distance_helpers test_distance_helpers.cpp)
+    target_link_libraries(test_distance_helpers uwot_wrapper)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(test_distance_helpers OpenMP::OpenMP_CXX)
+    endif()
+
+    # Distance simple test
+    add_executable(test_distance_simple test_distance_simple.cpp)
+    target_link_libraries(test_distance_simple uwot_wrapper)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(test_distance_simple OpenMP::OpenMP_CXX)
+    endif()
+
+    # Debug transform accuracy test
+    add_executable(debug_transform_accuracy debug_transform_accuracy.cpp)
+    target_link_libraries(debug_transform_accuracy uwot_wrapper)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(debug_transform_accuracy OpenMP::OpenMP_CXX)
+    endif()
+
+    # Embedding data preservation test
+    add_executable(test_embedding_preservation test_embedding_preservation.cpp)
+    target_link_libraries(test_embedding_preservation uwot_wrapper)
+    if(OpenMP_CXX_FOUND)
+        target_link_libraries(test_embedding_preservation OpenMP::OpenMP_CXX)
     endif()
 endif()
 

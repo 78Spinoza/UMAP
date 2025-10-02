@@ -30,7 +30,8 @@ namespace fit_utils {
         std::vector<int>& nn_indices,
         std::vector<double>& nn_distances,
         int force_exact_knn,
-        uwot_progress_callback_v2 progress_callback = nullptr
+        uwot_progress_callback_v2 progress_callback = nullptr,
+        int autoHNSWParam = 1
     );
 
     // Convert uwot smooth k-NN output to edge list format
@@ -75,7 +76,9 @@ namespace fit_utils {
         int M,
         int ef_construction,
         int ef_search,
-        int use_quantization = 0
+        int use_quantization,
+        int random_seed = -1,
+        int autoHNSWParam = 1
     );
 
     // Enhanced v2 function with loss reporting
@@ -96,6 +99,22 @@ namespace fit_utils {
         int M,
         int ef_construction,
         int ef_search,
-        int use_quantization = 0
+        int use_quantization = 0,
+        int random_seed = -1,
+        int autoHNSWParam = 1
     );
+
+    // Helper functions for uwot_fit refactoring
+    namespace fit_helpers {
+        // HNSW recall validation and auto-tuning
+        bool validate_hnsw_recall(UwotModel* model, const float* data, int n_obs, int n_dim,
+                                  int n_neighbors, UwotMetric metric, uwot_progress_callback_v2 progress_callback);
+
+        // Auto-tune ef_search parameter based on recall measurement
+        bool auto_tune_ef_search(UwotModel* model, const float* data, int n_obs, int n_dim,
+                                 int n_neighbors, UwotMetric metric, uwot_progress_callback_v2 progress_callback);
+
+        // Initialize random number generators with seed
+        void initialize_random_generators(UwotModel* model);
+    }
 }

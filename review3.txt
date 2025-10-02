@@ -1,0 +1,176 @@
+1. uwot_fit.cpp
+Summary: Handles model fitting, normalization, neighbor stats, HNSW tuning, and recall validation.
+Strengths:
+
+Comprehensive stats (min, mean, std, percentiles) for distances.
+Auto-tuning of HNSW ef_search based on recall.
+Progress callbacks integrated well.
+
+Issues:
+
+compute_normalization: Uses static_cast<size_t> for indexing, but no overflow checks for large n_obs * n_dim.
+compute_neighbor_statistics: Skips self-distance correctly, but HNSW distance conversions assume specific metrics—add a comment explaining why (e.g., HNSW returns squared for L2).
+tune_hnsw_params: Quick recall uses only 20 samples; could be configurable. max_ef_search hardcoded based on size—make it a parameter.
+validate_hnsw_recall: Full brute-force exact k-NN per sample is slow for large n_dim; sample size (100) is reasonable but could warn if n_obs is small.
+Broad catch (...) in loops—log the error instead.
+Truncated code at end; assuming it's complete, ensure no resource leaks.
+
+Improvements:
+
+Use std::span<const float> for data to avoid raw pointers.
+Factor out distance conversion into a helper function (duplicated in transform.cpp).
+Add SIMD (e.g., via OpenMP SIMD pragma) to mean/std loops.
+Make exact_match_threshold configurable or explain the magic number (1e-3 / sqrt(n_dim)).
+Suggestion: Add a struct NeighborStats to hold min/mean/std/etc., reducing parameter clutter.
+
+2. uwot_distance.cpp
+Summary: Distance metric implementations and utilities.
+Strengths:
+
+Handles edge cases like zero-norm/zero-variance well, with tolerances.
+Validation functions (e.g., validate_hamming_data) sample data to avoid full scans.
+compute_distance switches cleanly.
+
+Issues:
+
+hamming_distance: Uses 1e-6f tolerance—make it a constant.
+correlation_distance: Returns 1.0f for zero-variance (max distance), but docs say "maximum distance (zero correlation)"—consistent, but add unit tests.
+validate_metric_data: Uses fprintf(stderr)—use callbacks or logging instead.
+find_knn_exact: Builds full distance list then sorts—inefficient for large n_obs; use partial_sort for top-k.
+build_distance_matrix: O(n^2) with progress—good, but could parallelize outer loop with OpenMP.
+Truncated code; ensure no missing parts.
+
+Improvements:
+
+Templatize distances for double/float if needed.
+Use std::hypot or fused multiply-add for Euclidean to reduce FP errors.
+Add vectorized versions (e.g., with AVX intrinsics) for hot paths.
+Replace fprintf with a logging macro that uses global callback.
+
+3. uwot_hnsw_utils.cpp
+Summary: HNSW space factory, streaming, and normalization.
+Strengths:
+
+Secure temp file generation with crypto-secure random.
+Normalization modes (z-score, L2) well-defined.
+Parallel addition for large datasets.
+
+Issues:
+
+generate_unique_temp_filename: Uses std::filesystem (C++17)—good, but fallback could be more robust.
+save_hnsw_to_stream: Direct stream copy—efficient.
+load_hnsw_from_stream: Copies fixed size—add checks if stream has enough data.
+add_points_to_hnsw: Assumes HNSW is thread-safe (it is, per docs), but confirm in comments.
+normalize_data_consistent: Modifies output_data in-place if mode=0—document side effects.
+Truncated code; ensure full implementation.
+
+Improvements:
+
+Use std::span for data views.
+Add compression to streaming (e.g., integrate LZ4 here too).
+Make determine_normalization_mode return an enum for clarity.
+
+4. uwot_transform.cpp
+Summary: Transforms new data using fitted model.
+Strengths:
+
+Detailed metrics (confidence, outlier, percentile, z-score) for AI inference—very useful.
+Handles quantization fallback gracefully.
+Boosts ef_search for better recall.
+
+Issues:
+
+Raw memcpy replaced with safe loop—good fix, but use std::copy instead.
+Broad catch (...)—specify std::exception.
+Duplicated distance conversion logic from fit.cpp.
+Assumes model->embedding_space_index exists—checked, but error code could be more specific.
+Truncated code; verify full stats calculations.
+
+Improvements:
+
+Refactor shared code (e.g., normalization, distance conversion) into utils.
+Add batch transform for multiple points to amortize overhead.
+Use std::clamp (C++17) for scores.
+
+5. uwot_simple_wrapper.cpp
+Summary: C API wrapper.
+Strengths:
+
+Clean extern "C" for FFI.
+Forwards to utils functions.
+
+Issues:
+
+No input validation (e.g., null checks on pointers).
+Global callback—thread-local is good, but document usage.
+
+Improvements:
+
+Add null checks and return errors early.
+Use const where possible (e.g., const float* data).
+
+6. uwot_quantization.cpp
+Summary: PQ for compression.
+Strengths:
+
+Deterministic init with seed 42.
+Handles empty clusters by re-init.
+
+Issues:
+
+Fixed k=256—hardcoded for 8-bit.
+Simple k-means: No early stopping if converged early (fixed in code with epsilon).
+No parallelism in k-means.
+
+Improvements:
+
+Parallelize assignment/update with OpenMP.
+Add convergence logging via callback.
+
+7. uwot_persistence.cpp
+Summary: Model saving/loading with compression.
+Strengths:
+
+LZ4 compression with bounds checks—secure.
+Endian-safe—excellent.
+Fallback reconstruction from PQ/embeddings.
+
+Issues:
+
+Temp file risks (though mitigated).
+Broad catches.
+Truncated heavily; ensure full save/load symmetry.
+
+Improvements:
+
+Use protobuf or flatbuffers for structured serialization.
+Add version checks during load.
+
+8. uwot_progress_utils.cpp
+Summary: Progress and utils.
+Strengths:
+
+Human-readable time formatting.
+Safe callback invocation.
+
+Issues:
+
+Global thread-local vars—fine, but prefer passing as params.
+
+Improvements:
+
+Add rate limiting to callbacks to avoid spam.
+
+9. uwot_model.cpp
+Summary: Model creation and info.
+Strengths:
+
+Simple, error-coded getters.
+
+Issues:
+
+No deep copy/clone for models.
+
+Improvements:
+
+Add move semantics if models are copyable.

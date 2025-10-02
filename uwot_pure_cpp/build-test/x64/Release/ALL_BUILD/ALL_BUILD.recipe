@@ -1,0 +1,68 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ProjectOutputs>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\x64\Release\ZERO_CHECK</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\Release\uwot.dll</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\Release\debug_quantization_simple.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\Release\debug_save_load_test.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\Release\debug_transform_accuracy.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\Release\refactoring_demo.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\Release\test_comprehensive_pipeline.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\Release\test_distance_helpers.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\Release\test_distance_simple.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\Release\test_ef_scaling_simple.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\Release\test_ef_search_scaling.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\Release\test_embedding_extraction_optimization.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\Release\test_embedding_preservation.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\Release\test_enhanced_wrapper.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\Release\test_error_fixes_simple.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\Release\test_quantization_comprehensive.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\Release\test_refactoring_validation.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\Release\test_standard_comprehensive.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\Release\test_zero_norm_handling.exe</FullPath>
+    </ProjectOutput>
+    <ProjectOutput>
+      <FullPath>C:\UMAP\uwot_pure_cpp\build-test\x64\Release\ALL_BUILD</FullPath>
+    </ProjectOutput>
+  </ProjectOutputs>
+  <ContentFiles />
+  <SatelliteDlls />
+  <NonRecipeFileRefs />
+</Project>

@@ -259,7 +259,7 @@ TestResult run_test_phase(const std::vector<float>& data, int embedding_dim, con
     int fit_result = uwot_fit_with_progress_v2(
         original_model, const_cast<float*>(data.data()), N_SAMPLES, N_DIM, embedding_dim, N_NEIGHBORS,
         MIN_DIST, SPREAD, N_EPOCHS, UWOT_METRIC_EUCLIDEAN,
-        result.original_projection.data(), progress_callback_v2, 0, 16, 200, 200
+        result.original_projection.data(), progress_callback_v2, 0, 16, 200, 200, 0, 42, 1
     );
 
     if (fit_result != UWOT_SUCCESS) {
@@ -461,7 +461,9 @@ TestResult run_quantized_test_phase(const std::vector<float>& data, int embeddin
         fit_embedding.data(),
         progress_callback_v2, // Add progress callback
         0, 16, 200, 200,      // HNSW parameters (force_exact_knn=0, M=16, ef_construction=200, ef_search=200)
-        1                     // use_quantization = 1 (ENABLED)
+        1,                    // use_quantization = 1 (ENABLED)
+        42,                   // random_seed = 42 (FIXED)
+        1                     // autoHNSWParam = 1 (ENABLED)
     );
 
     if (fit_result != UWOT_SUCCESS) {

@@ -42,9 +42,12 @@ extern "C" {
         int ef_search,
         int use_quantization
     ) {
+        if (!model || !data || !embedding || n_obs <= 0 || n_dim <= 0 || embedding_dim <= 0) {
+            return UWOT_ERROR_INVALID_PARAMS;
+        }
         return fit_utils::uwot_fit_with_progress(model, data, n_obs, n_dim, embedding_dim, n_neighbors,
             min_dist, spread, n_epochs, metric, embedding, progress_callback,
-            force_exact_knn, M, ef_construction, ef_search, use_quantization);
+            force_exact_knn, M, ef_construction, ef_search, use_quantization, -1, 1);
     }
 
     UWOT_API int uwot_fit_with_progress_v2(
@@ -64,11 +67,16 @@ extern "C" {
         int M,
         int ef_construction,
         int ef_search,
-        int use_quantization
+        int use_quantization,
+        int random_seed,
+        int autoHNSWParam
     ) {
+        if (!model || !data || !embedding || n_obs <= 0 || n_dim <= 0 || embedding_dim <= 0) {
+            return UWOT_ERROR_INVALID_PARAMS;
+        }
         return fit_utils::uwot_fit_with_progress_v2(model, data, n_obs, n_dim, embedding_dim, n_neighbors,
             min_dist, spread, n_epochs, metric, embedding, progress_callback,
-            force_exact_knn, M, ef_construction, ef_search, use_quantization);
+            force_exact_knn, M, ef_construction, ef_search, use_quantization, random_seed, autoHNSWParam);
     }
 
     UWOT_API int uwot_transform(
@@ -78,6 +86,9 @@ extern "C" {
         int n_dim,
         float* embedding
     ) {
+        if (!model || !new_data || !embedding || n_new_obs <= 0 || n_dim <= 0) {
+            return UWOT_ERROR_INVALID_PARAMS;
+        }
         return transform_utils::uwot_transform(model, new_data, n_new_obs, n_dim, embedding);
     }
 
@@ -94,6 +105,9 @@ extern "C" {
         float* percentile_rank,
         float* z_score
     ) {
+        if (!model || !new_data || !embedding || n_new_obs <= 0 || n_dim <= 0) {
+            return UWOT_ERROR_INVALID_PARAMS;
+        }
         return transform_utils::uwot_transform_detailed(model, new_data, n_new_obs, n_dim, embedding,
             nn_indices, nn_distances, confidence_score, outlier_level, percentile_rank, z_score);
     }
@@ -128,10 +142,16 @@ extern "C" {
     }
 
     UWOT_API int uwot_save_model(UwotModel* model, const char* filename) {
+        if (!model || !filename || filename[0] == '\0') {
+            return UWOT_ERROR_INVALID_PARAMS;
+        }
         return persistence_utils::save_model(model, filename);
     }
 
     UWOT_API UwotModel* uwot_load_model(const char* filename) {
+        if (!filename || filename[0] == '\0') {
+            return nullptr;
+        }
         return persistence_utils::load_model(filename);
     }
 
@@ -144,19 +164,55 @@ extern "C" {
     }
 
     UWOT_API int uwot_get_embedding_dim(UwotModel* model) {
+        if (!model) return -1;
         return model_utils::get_embedding_dim(model);
     }
 
     UWOT_API int uwot_get_n_vertices(UwotModel* model) {
+        if (!model) return -1;
         return model_utils::get_n_vertices(model);
     }
 
     UWOT_API int uwot_is_fitted(UwotModel* model) {
+        if (!model) return 0;
         return model_utils::is_fitted(model);
     }
 
     UWOT_API const char* uwot_get_version() {
         return model_utils::get_version();
+    }
+
+    UWOT_API void uwot_set_always_save_embedding_data(UwotModel* model, bool always_save) {
+        if (model) {
+            model->always_save_embedding_data = always_save;
+        }
+    }
+
+    UWOT_API bool uwot_get_always_save_embedding_data(UwotModel* model) {
+        if (!model) return false;
+        return model->always_save_embedding_data;
+    }
+
+    UWOT_API int uwot_get_model_info_v2(
+        UwotModel* model,
+        int* n_vertices,
+        int* n_dim,
+        int* embedding_dim,
+        int* n_neighbors,
+        float* min_dist,
+        float* spread,
+        UwotMetric* metric,
+        int* hnsw_M,
+        int* hnsw_ef_construction,
+        int* hnsw_ef_search,
+        uint32_t* original_crc,
+        uint32_t* embedding_crc,
+        uint32_t* version_crc,
+        float* hnsw_recall_percentage
+    ) {
+        return model_utils::get_model_info_v2(model, n_vertices, n_dim, embedding_dim,
+            n_neighbors, min_dist, spread, metric, hnsw_M, hnsw_ef_construction, hnsw_ef_search,
+            original_crc, embedding_crc, version_crc, hnsw_recall_percentage);
     }
 
     UWOT_API void uwot_set_global_callback(uwot_progress_callback_v2 callback) {

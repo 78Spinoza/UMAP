@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\UMAP\uwot_pure_cpp\debug_save_load_test.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\UMAP\uwot_pure_cpp\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{5EE93C24-D6BC-30BF-ADB2-A8D5AEC3F5C5}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

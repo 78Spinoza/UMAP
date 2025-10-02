@@ -1,6 +1,8 @@
 #include "uwot_transform.h"
 #include "uwot_simple_wrapper.h"
 #include "uwot_quantization.h"
+#include "uwot_crc32.h"
+#include "uwot_progress_utils.h"
 #include <iostream>
 #include <algorithm>
 #include <numeric>
@@ -95,183 +97,256 @@ namespace transform_utils {
                     }
                 }
 
-                // CRITICAL SAFETY CHECK: Ensure HNSW index is valid
-                if (!model->ann_index) {
-                    return UWOT_ERROR_MODEL_NOT_FITTED;
+                // Note: Embedding space HNSW index is optional for basic transform (only needed for AI inference)
+
+                // CRITICAL FIX: Exact coordinate preservation for identical training points
+                // If this point is identical to a training point, return exact fitted coordinates
+                // This ensures perfect consistency between fit and transform for training data
+
+                bool found_exact_match = false;
+                int exact_match_idx = -1;
+                const float EXACT_MATCH_TOLERANCE = 1e-3f; // 1e-3 euclidean distance tolerance
+
+                // Check if this point is identical to any training point (fast path for training data)
+                if (model->embedding_data && model->n_vertices > 0) {
+                    // Use exact k-NN search with very small radius to find identical points
+                    // This is much faster than brute force O(n) check
+                    model->original_space_index->setEf(model->n_neighbors * 8); // Higher ef for exactness
+                    auto exact_search = model->original_space_index->searchKnn(normalized_point.data(), 1);
+                    model->original_space_index->setEf(original_ef);
+
+                    if (!exact_search.empty()) {
+                        auto pair = exact_search.top();
+                        float distance = pair.first;
+                        int neighbor_idx = static_cast<int>(pair.second);
+
+                        // Apply metric-specific distance conversion
+                        switch (model->metric) {
+                        case UWOT_METRIC_EUCLIDEAN:
+                            // HNSW already returns actual Euclidean distance
+                            break;
+                        case UWOT_METRIC_COSINE:
+                            distance = std::max(0.0f, std::min(2.0f, 1.0f + distance));
+                            break;
+                        case UWOT_METRIC_MANHATTAN:
+                            distance = std::max(0.0f, distance);
+                            break;
+                        default:
+                            distance = std::max(0.0f, distance);
+                            break;
+                        }
+
+                        if (distance < EXACT_MATCH_TOLERANCE) {
+                            found_exact_match = true;
+                            exact_match_idx = neighbor_idx;
+                        }
+                    }
                 }
 
-                // FIX #1: Significantly boost ef_search for high-dimensional data with small n_neighbors
-                size_t original_ef = model->ann_index->ef_;
-                // For high dimensions and small n_neighbors, we need much higher ef_search
-                size_t boosted_ef = static_cast<size_t>(model->n_neighbors * 32); // Aggressive boost
-                // Cap at a reasonable maximum to avoid excessive computation
+                // STEP 1: Transform new data point to embedding space
+                if (found_exact_match) {
+                    // PERFECT: Return exact fitted coordinates for identical training point
+                    const float* exact_embedding = &model->embedding_data[static_cast<size_t>(exact_match_idx) * static_cast<size_t>(model->embedding_dim)];
+                    for (int d = 0; d < model->embedding_dim; d++) {
+                        new_embedding[static_cast<size_t>(i) * static_cast<size_t>(model->embedding_dim) + static_cast<size_t>(d)] = exact_embedding[d];
+                    }
+                } else {
+                    // APPROXIMATE: Use HNSW approximation for truly new points
+                    // This follows the traditional UMAP transform method to get embedding coordinates
+
+                    // Find neighbors in ORIGINAL space (for transform weights calculation)
+                size_t original_ef = model->original_space_index->ef_;
+                size_t boosted_ef = static_cast<size_t>(model->n_neighbors * 32);
                 boosted_ef = std::min(boosted_ef, static_cast<size_t>(400));
-                model->ann_index->setEf(std::max(original_ef, boosted_ef));
+                model->original_space_index->setEf(std::max(original_ef, boosted_ef));
 
-                // Use HNSW to find nearest neighbors (with quantized point if applicable)
-                auto search_result = model->ann_index->searchKnn(search_point.data(), model->n_neighbors);
+                auto original_search_result = model->original_space_index->searchKnn(search_point.data(), model->n_neighbors);
+                model->original_space_index->setEf(original_ef);
 
-                model->ann_index->setEf(original_ef); // Restore original
-
-                std::vector<int> neighbors;
-                std::vector<float> distances;
+                // Calculate transform weights using original space distances
+                std::vector<int> original_neighbors;
+                std::vector<float> original_distances;
                 std::vector<float> weights;
                 float total_weight = 0.0f;
 
-                // Variables for exact match detection
-                bool exact_match_found = false;
-                int exact_match_idx = -1;
-
-                // Fix 3: Use model's precomputed exact match threshold
-                float match_threshold = model->exact_match_threshold;
-
-                // Extract neighbors and compute detailed statistics
-                while (!search_result.empty()) {
-                    auto pair = search_result.top();
-                    search_result.pop();
+                while (!original_search_result.empty()) {
+                    auto pair = original_search_result.top();
+                    original_search_result.pop();
 
                     int neighbor_idx = static_cast<int>(pair.second);
-                    // Convert HNSW distance based on metric
                     float distance = pair.first;
+
+                    // Convert HNSW distance based on metric
                     switch (model->metric) {
                     case UWOT_METRIC_EUCLIDEAN:
-                        distance = std::sqrt(std::max(0.0f, distance)); // L2Space returns squared distance
+                        // HNSW already returns actual Euclidean distance - no conversion needed
+                        // distance = distance;  // No-op
                         break;
                     case UWOT_METRIC_COSINE:
-                        // InnerProductSpace returns -inner_product for unit vectors
                         distance = std::max(0.0f, std::min(2.0f, 1.0f + distance));
                         break;
                     case UWOT_METRIC_MANHATTAN:
-                        distance = std::max(0.0f, distance); // Direct Manhattan distance
+                        distance = std::max(0.0f, distance);
                         break;
                     default:
                         distance = std::max(0.0f, distance);
                         break;
                     }
 
-                    // Check for exact match (distance near zero)
-                    if (distance < match_threshold && !exact_match_found) {
-                        exact_match_found = true;
-                        exact_match_idx = neighbor_idx;
-                    }
+                    original_neighbors.push_back(neighbor_idx);
+                    original_distances.push_back(distance);
 
-                    // Fix 4: Base bandwidth on neighbor distances only (remove min_dist dependency)
-                    float eps = 1e-6f;
-                    float median_neighbor_dist = model->median_neighbor_distance > 0.0f ? model->median_neighbor_distance : model->mean_neighbor_distance;
-                    float base_bandwidth = std::max(1e-4f, 0.5f * median_neighbor_dist);
-
-                    // For very distant points, increase bandwidth to prevent total weight collapse
+                    // Calculate transform weights
+                    float median_dist = model->median_original_distance > 0.0f ? model->median_original_distance : model->mean_original_distance;
+                    float base_bandwidth = std::max(1e-4f, 0.5f * median_dist);
                     float adaptive_bandwidth = base_bandwidth;
                     if (distance > base_bandwidth * 2.0f) {
-                        adaptive_bandwidth = distance * 0.3f; // More conservative scaling
+                        adaptive_bandwidth = distance * 0.3f;
                     }
-
                     float weight = std::exp(-distance * distance / (2.0f * adaptive_bandwidth * adaptive_bandwidth));
-
-                    // Fix 2: Minimal weight floor to preserve distance sensitivity
                     weight = std::max(weight, 1e-6f);
-
-                    neighbors.push_back(neighbor_idx);
-                    distances.push_back(distance);
                     weights.push_back(weight);
                     total_weight += weight;
                 }
 
-                // Neighbor search completed
-
-                // Store neighbor information
-                if (nn_indices && nn_distances) {
-                    for (size_t k = 0; k < neighbors.size() && k < static_cast<size_t>(model->n_neighbors); k++) {
-                        nn_indices[static_cast<size_t>(i) * static_cast<size_t>(model->n_neighbors) + k] = neighbors[k];
-                        nn_distances[static_cast<size_t>(i) * static_cast<size_t>(model->n_neighbors) + k] = distances[k];
+                // Normalize weights
+                if (total_weight > 0.0f) {
+                    for (float& w : weights) {
+                        w /= total_weight;
                     }
                 }
 
-                // Calculate safety metrics
-                if (!distances.empty()) {
-                    float min_distance = *std::min_element(distances.begin(), distances.end());
-                    float mean_distance = std::accumulate(distances.begin(), distances.end(), 0.0f) / distances.size();
+                // DEBUG: Check if embedding array has data
+                if (i == 0) {
+                    bool embedding_has_data = false;
+                    size_t check_count = std::min(static_cast<size_t>(10), model->embedding.size());
+                    for (size_t idx = 0; idx < check_count; idx++) {
+                        if (std::abs(model->embedding[idx]) > 1e-6f) {
+                            embedding_has_data = true;
+                            break;
+                        }
+                    }
+                    std::cout << "[DEBUG] Transform: Model embedding array has data: " << (embedding_has_data ? "YES" : "NO") << std::endl;
+                    std::cout << "[DEBUG] Transform: Embedding array size: " << model->embedding.size() << std::endl;
+                }
 
-                    // Fix 5: Confidence score with robust denominator guard
+                // Calculate new embedding coordinates as weighted average of neighbor embeddings
+                // TEMPORARY: Use embedding array directly until HNSW extraction is fully reliable
+                for (int d = 0; d < model->embedding_dim; d++) {
+                    float coord = 0.0f;
+                    for (size_t k = 0; k < original_neighbors.size(); k++) {
+                        size_t embed_idx = static_cast<size_t>(original_neighbors[k]) * static_cast<size_t>(model->embedding_dim) + static_cast<size_t>(d);
+                        if (embed_idx < model->embedding.size()) {
+                            coord += model->embedding[embed_idx] * weights[k];
+                        } else {
+                            std::cout << "[DEBUG] Transform: Embedding index out of bounds: " << embed_idx << " >= " << model->embedding.size() << std::endl;
+                        }
+                    }
+                    new_embedding[static_cast<size_t>(i) * static_cast<size_t>(model->embedding_dim) + static_cast<size_t>(d)] = coord;
+                }
+
+                // STEP 2: CRITICAL FOR AI - Find neighbors in EMBEDDING space for AI inference (optional)
+                // This answers: "Which learned patterns are similar to this new data?"
+                // NOTE: This is only used for AI inference/outlier detection, NOT for basic transform
+
+                std::vector<int> embedding_neighbors;
+                std::vector<float> embedding_distances;
+
+                // Only perform embedding space search if index exists AND caller requested detailed info
+                if (model->embedding_space_index && (nn_indices || confidence_score || outlier_level)) {
+                    // Embedding space search is only for AI inference features, not basic transform
+                    const float* new_embedding_point = &new_embedding[static_cast<size_t>(i) * static_cast<size_t>(model->embedding_dim)];
+
+                    size_t embedding_ef = model->embedding_space_index->ef_;
+                    size_t boosted_embedding_ef = static_cast<size_t>(model->n_neighbors * 32);
+                    boosted_embedding_ef = std::min(boosted_embedding_ef, static_cast<size_t>(400));
+                    model->embedding_space_index->setEf(std::max(embedding_ef, boosted_embedding_ef));
+
+                    auto embedding_search_result = model->embedding_space_index->searchKnn(new_embedding_point, model->n_neighbors);
+                    model->embedding_space_index->setEf(embedding_ef);
+
+                    // Extract embedding space neighbors and distances for AI inference
+                    while (!embedding_search_result.empty()) {
+                        auto pair = embedding_search_result.top();
+                        embedding_search_result.pop();
+
+                        int neighbor_idx = static_cast<int>(pair.second);
+                        float distance = std::sqrt(std::max(0.0f, pair.first)); // L2Space returns squared distance
+
+                        embedding_neighbors.push_back(neighbor_idx);
+                        embedding_distances.push_back(distance);
+                    }
+                }
+
+                // Store EMBEDDING SPACE neighbor information (this is what AI needs)
+                if (nn_indices && nn_distances) {
+                    for (size_t k = 0; k < embedding_neighbors.size() && k < static_cast<size_t>(model->n_neighbors); k++) {
+                        nn_indices[static_cast<size_t>(i) * static_cast<size_t>(model->n_neighbors) + k] = embedding_neighbors[k];
+                        nn_distances[static_cast<size_t>(i) * static_cast<size_t>(model->n_neighbors) + k] = embedding_distances[k];
+                    }
+                }
+
+                // Calculate AI inference safety metrics using EMBEDDING space distances
+                if (!embedding_distances.empty()) {
+                    float min_distance = *std::min_element(embedding_distances.begin(), embedding_distances.end());
+                    float mean_distance = std::accumulate(embedding_distances.begin(), embedding_distances.end(), 0.0f) / embedding_distances.size();
+
+                    // AI confidence score based on embedding space neighbor distances
                     if (confidence_score) {
                         const float EPS = 1e-8f;
-                        float denom = std::max(EPS, model->p95_neighbor_distance - model->min_neighbor_distance);
-                        float normalized_dist = (min_distance - model->min_neighbor_distance) / denom;
+                        float denom = std::max(EPS, model->p95_embedding_distance - model->min_embedding_distance);
+                        float normalized_dist = (min_distance - model->min_embedding_distance) / denom;
                         confidence_score[i] = std::clamp(1.0f - normalized_dist, 0.0f, 1.0f);
                     }
 
-                    // Outlier level assessment
+                    // AI outlier level assessment based on embedding space
                     if (outlier_level) {
-                        if (min_distance <= model->p95_neighbor_distance) {
-                            outlier_level[i] = 0; // Normal
+                        if (min_distance <= model->p95_embedding_distance) {
+                            outlier_level[i] = 0; // Normal - AI has seen similar patterns
                         }
-                        else if (min_distance <= model->p99_neighbor_distance) {
-                            outlier_level[i] = 1; // Unusual
+                        else if (min_distance <= model->p99_embedding_distance) {
+                            outlier_level[i] = 1; // Unusual but acceptable
                         }
-                        else if (min_distance <= model->mild_outlier_threshold) {
-                            outlier_level[i] = 2; // Mild outlier
+                        else if (min_distance <= model->mild_embedding_outlier_threshold) {
+                            outlier_level[i] = 2; // Mild outlier - AI extrapolating
                         }
-                        else if (min_distance <= model->extreme_outlier_threshold) {
-                            outlier_level[i] = 3; // Extreme outlier
+                        else if (min_distance <= model->extreme_embedding_outlier_threshold) {
+                            outlier_level[i] = 3; // Extreme outlier - AI uncertain
                         }
                         else {
-                            outlier_level[i] = 4; // No man's land
+                            outlier_level[i] = 4; // No man's land - AI should not trust
                         }
                     }
 
-                    // Fix 5: Percentile rank with guarded denominators
+                    // Percentile rank in embedding space
                     if (percentile_rank) {
                         const float EPS = 1e-8f;
-                        if (min_distance <= model->min_neighbor_distance) {
+                        if (min_distance <= model->min_embedding_distance) {
                             percentile_rank[i] = 0.0f;
                         }
-                        else if (min_distance >= model->p99_neighbor_distance) {
+                        else if (min_distance >= model->p99_embedding_distance) {
                             percentile_rank[i] = 99.0f;
                         }
                         else {
-                            float p95_range = std::max(EPS, model->p95_neighbor_distance - model->min_neighbor_distance);
-                            if (min_distance <= model->p95_neighbor_distance) {
-                                percentile_rank[i] = 95.0f * (min_distance - model->min_neighbor_distance) / p95_range;
+                            float p95_range = std::max(EPS, model->p95_embedding_distance - model->min_embedding_distance);
+                            if (min_distance <= model->p95_embedding_distance) {
+                                percentile_rank[i] = 95.0f * (min_distance - model->min_embedding_distance) / p95_range;
                             }
                             else {
-                                float p99_range = std::max(EPS, model->p99_neighbor_distance - model->p95_neighbor_distance);
-                                percentile_rank[i] = 95.0f + 4.0f * (min_distance - model->p95_neighbor_distance) / p99_range;
+                                float p99_range = std::max(EPS, model->p99_embedding_distance - model->p95_embedding_distance);
+                                percentile_rank[i] = 95.0f + 4.0f * (min_distance - model->p95_embedding_distance) / p99_range;
                             }
                         }
                     }
 
-                    // Fix 5: Z-score with robust denominator guard
+                    // Z-score in embedding space
                     if (z_score) {
                         const float EPS = 1e-8f;
-                        float denom_z = std::max(EPS, model->std_neighbor_distance);
-                        z_score[i] = (min_distance - model->mean_neighbor_distance) / denom_z;
+                        float denom_z = std::max(EPS, model->std_embedding_distance);
+                        z_score[i] = (min_distance - model->mean_embedding_distance) / denom_z;
                     }
                 }
-
-                // Handle exact match case (copy training embedding)
-                if (exact_match_found) {
-                    for (int d = 0; d < model->embedding_dim; d++) {
-                        new_embedding[static_cast<size_t>(i) * static_cast<size_t>(model->embedding_dim) + static_cast<size_t>(d)] =
-                            model->embedding[static_cast<size_t>(exact_match_idx) * static_cast<size_t>(model->embedding_dim) + static_cast<size_t>(d)];
-                    }
-                }
-                else {
-                    // Normalize weights
-                    if (total_weight > 0.0f) {
-                        for (float& w : weights) {
-                            w /= total_weight;
-                        }
-                    }
-
-                    // Initialize new point as weighted average of neighbor embeddings
-                    for (int d = 0; d < model->embedding_dim; d++) {
-                        float coord = 0.0f;
-                        for (size_t k = 0; k < neighbors.size(); k++) {
-                            coord += model->embedding[static_cast<size_t>(neighbors[k]) * static_cast<size_t>(model->embedding_dim) + static_cast<size_t>(d)] * weights[k];
-                        }
-                        new_embedding[static_cast<size_t>(i) * static_cast<size_t>(model->embedding_dim) + static_cast<size_t>(d)] = coord;
-                    }
-                }
+                } // Close the else block for approximate transformation
             }
 
             // Fix 6: Bounds-checked element-wise copy instead of unsafe memcpy
@@ -286,7 +361,8 @@ namespace transform_utils {
             return UWOT_SUCCESS;
 
         }
-        catch (...) {
+        catch (const std::exception& e) {
+            send_error_to_callback(e.what());
             return UWOT_ERROR_MEMORY;
         }
     }

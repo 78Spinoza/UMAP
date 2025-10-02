@@ -285,7 +285,7 @@ QuantizationTestResult run_quantization_test(const std::vector<float>& data) {
         non_quantized_model, const_cast<float*>(data.data()), N_SAMPLES, N_DIM, EMBEDDING_DIM, N_NEIGHBORS,
         MIN_DIST, SPREAD, N_EPOCHS, UWOT_METRIC_EUCLIDEAN,
         result.non_quantized_projection.data(), progress_callback_v2,
-        0, 16, 200, 200, 0); // use_quantization = 0 (disabled)
+        0, 16, 200, 200, 0, 42, 1); // use_quantization = 0, random_seed = 42
 
     if (fit_result != UWOT_SUCCESS) {
         std::cout << "❌ Non-quantized training failed" << std::endl;
@@ -343,7 +343,7 @@ QuantizationTestResult run_quantization_test(const std::vector<float>& data) {
         quantized_model, const_cast<float*>(data.data()), N_SAMPLES, N_DIM, EMBEDDING_DIM, N_NEIGHBORS,
         MIN_DIST, SPREAD, N_EPOCHS, UWOT_METRIC_EUCLIDEAN,
         result.quantized_projection.data(), progress_callback_v2,
-        0, 16, 200, 200, 1); // use_quantization = 1 (enabled)
+        0, 16, 200, 200, 1, 42, 1); // use_quantization = 1, random_seed = 42
 
     if (fit_result != UWOT_SUCCESS) {
         std::cout << "❌ Quantized training failed" << std::endl;

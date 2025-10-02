@@ -5,6 +5,15 @@
 #include <algorithm>
 #include "uwot_distance.h"
 
+// Include the implementation directly for testing
+#include "uwot_distance.cpp"
+
+// Stub implementation for missing callback function used by distance validation
+void send_warning_to_callback(const char* message) {
+    // For testing, just print the warning to stdout
+    std::cout << "WARNING: " << message << std::endl;
+}
+
 // Demo showing how the helper functions eliminate code duplication
 
 void demonstrate_refactoring_benefits() {

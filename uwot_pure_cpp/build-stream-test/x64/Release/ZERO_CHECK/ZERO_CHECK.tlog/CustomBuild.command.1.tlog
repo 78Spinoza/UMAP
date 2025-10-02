@@ -1,0 +1,10 @@
+^C:\UMAP\UWOT_PURE_CPP\BUILD-STREAM-TEST\CMAKEFILES\4D3DE1C2FC5A6D9D2C24AA3CE9A010B4\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/UMAP/uwot_pure_cpp -BC:/UMAP/uwot_pure_cpp/build-stream-test --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/UMAP/uwot_pure_cpp/build-stream-test/UMWWGBWrapper.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

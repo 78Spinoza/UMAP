@@ -1,6 +1,9 @@
 ﻿#ifndef UWOT_SIMPLE_WRAPPER_H
 #define UWOT_SIMPLE_WRAPPER_H
 
+#include <cstdint>
+#include <cstddef>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -24,9 +27,10 @@ extern "C" {
 #define UWOT_ERROR_FILE_IO -4
 #define UWOT_ERROR_MODEL_NOT_FITTED -5
 #define UWOT_ERROR_INVALID_MODEL_FILE -6
+#define UWOT_ERROR_CRC_MISMATCH -7
 
 // Version information
-#define UWOT_WRAPPER_VERSION_STRING "3.13.0"
+#define UWOT_WRAPPER_VERSION_STRING "3.17.0"
 
 // Distance metrics
     typedef enum {
@@ -59,6 +63,16 @@ extern "C" {
         int total,                // Total items to process
         float percent,            // Progress percentage (0-100)
         const char* message       // Time estimates, warnings, or NULL for no message
+    );
+
+    // Thread-safe callback with user data pointer
+    typedef void (*uwot_progress_callback_v3)(
+        const char* phase,        // Current phase: "Normalizing", "Building HNSW", "k-NN Graph", etc.
+        int current,              // Current progress counter
+        int total,                // Total items to process
+        float percent,            // Progress percentage (0-100)
+        const char* message,      // Time estimates, warnings, or NULL for no message
+        void* user_data           // User-defined context pointer for thread safety
     );
 
     // Core functions
@@ -100,7 +114,31 @@ extern "C" {
         int M = -1,
         int ef_construction = -1,
         int ef_search = -1,
-        int use_quantization = 0);
+        int use_quantization = 0,
+        int random_seed = -1,
+        int autoHNSWParam = 1);
+
+    // Thread-safe training with user data pointer
+    UWOT_API int uwot_fit_with_progress_v3(UwotModel* model,
+        float* data,
+        int n_obs,
+        int n_dim,
+        int embedding_dim,
+        int n_neighbors,
+        float min_dist,
+        float spread,
+        int n_epochs,
+        UwotMetric metric,
+        float* embedding,
+        uwot_progress_callback_v3 progress_callback,
+        void* user_data = nullptr,
+        int force_exact_knn = 0,
+        int M = -1,
+        int ef_construction = -1,
+        int ef_search = -1,
+        int use_quantization = 0,
+        int random_seed = -1,
+        int autoHNSWParam = 1);
 
     // Global callback management functions
     UWOT_API void uwot_set_global_callback(uwot_progress_callback_v2 callback);
@@ -159,6 +197,29 @@ extern "C" {
     UWOT_API int uwot_get_n_vertices(UwotModel* model);
     UWOT_API int uwot_is_fitted(UwotModel* model);
     UWOT_API const char* uwot_get_version();
+
+    // Embedding data preservation options
+    UWOT_API void uwot_set_always_save_embedding_data(UwotModel* model, bool always_save);
+    UWOT_API bool uwot_get_always_save_embedding_data(UwotModel* model);
+
+    // Enhanced model information with dual HNSW indices
+    UWOT_API int uwot_get_model_info_v2(
+        UwotModel* model,
+        int* n_vertices,
+        int* n_dim,
+        int* embedding_dim,
+        int* n_neighbors,
+        float* min_dist,
+        float* spread,
+        UwotMetric* metric,
+        int* hnsw_M,
+        int* hnsw_ef_construction,
+        int* hnsw_ef_search,
+        uint32_t* original_crc,
+        uint32_t* embedding_crc,
+        uint32_t* version_crc,
+        float* hnsw_recall_percentage
+    );
 
 #ifdef __cplusplus
 }
