@@ -1,19 +1,23 @@
 # Enhanced High-Performance UMAP C++ Implementation with C# Wrapper
 
-## 🎉 **Latest Update v3.15.0** - Stream-Based HNSW Serialization with CRC32 Validation
+## 🎉 **Latest Update v3.16.0** - Critical Euclidean Distance Transform Bug Fix
 
-**BREAKTHROUGH INNOVATION: Revolutionary stream-based HNSW serialization eliminates temporary files with automatic corruption detection!**
+**CRITICAL BUG FIX: Perfect pipeline consistency restored for Euclidean metric exact match detection!**
 
-✅ **Stream-Based HNSW Serialization**: Direct memory-to-file operations eliminate temporary files completely
-✅ **CRC32 Data Integrity**: Automatic corruption detection for both original and embedding space HNSW indices
-✅ **Dual HNSW Architecture**: Original space for fitting + Embedding space for AI inference
-✅ **AI Pattern Similarity**: Search in learned embedding space, not raw feature space
-✅ **Production Safety**: 5-level outlier detection with confidence scoring
-✅ **Memory Optimization**: 80-85% reduction (40GB → ~50MB) while maintaining AI capabilities
-✅ **Speed Breakthrough**: 50-2000x faster transforms with sub-millisecond AI inference
-✅ **Intelligent Auto-Tuning**: Automatic HNSW parameter optimization with recall validation (≥95% accuracy)
+✅ **Fixed Exact Match Detection**: L2Space squared distance now properly converted with sqrt() for accurate comparisons
+✅ **Perfect Pipeline Consistency**: Training embeddings match transform results exactly (MSE = 0)
+✅ **Test Suite Green**: All 15/15 C# tests passing (fixed previously failing quantization pipeline test)
+✅ **Production Reliability**: Proper exact coordinate preservation for identical training points
+✅ **High-Precision Applications**: Corrected distance comparisons for validation workflows
 
-**🔥 REVOLUTIONARY BREAKTHROUGH**: The new stream-based HNSW serialization provides **deployment-grade reliability** with automatic CRC32 validation. Zero temporary files, zero corruption risk, zero manual cleanup.
+**🔥 WHAT WAS FIXED**: Euclidean distance comparison in exact match detection used squared distances instead of actual distances. This caused training data to transform to different coordinates instead of exact matches, breaking pipeline consistency validation. The fix adds proper `std::sqrt()` conversion (uwot_transform.cpp:128-130), ensuring perfect coordinate preservation.
+
+**Previous v3.15.0 Features:**
+- ✅ **Stream-Based HNSW Serialization**: Direct memory-to-file operations eliminate temporary files completely
+- ✅ **CRC32 Data Integrity**: Automatic corruption detection for both original and embedding space HNSW indices
+- ✅ **Dual HNSW Architecture**: Original space for fitting + Embedding space for AI inference
+- ✅ **Memory Optimization**: 80-85% reduction (40GB → ~50MB) while maintaining AI capabilities
+- ✅ **Speed Breakthrough**: 50-2000x faster transforms with sub-millisecond AI inference
 
 ## What is UMAP?
 
@@ -828,18 +832,23 @@ Enhanced production-ready C# wrapper providing .NET integration:
 
 The fastest way to get started with all enhanced features:
 
-## 🚀 Latest Release: v3.15.0 - Stream-Based HNSW Serialization
+## 🚀 Latest Release: v3.16.0 - Critical Euclidean Distance Fix
 
-### What's New in v3.15.0
+### What's New in v3.16.0
+- **🔧 Critical Euclidean Distance Fix**: L2Space squared distance now properly converted with sqrt() for exact match detection
+- **✅ Perfect Pipeline Consistency**: Training embeddings match transform results exactly (MSE = 0)
+- **🧪 All Tests Passing**: 15/15 C# tests passing (fixed previously failing quantization pipeline test)
+- **🎯 Production Reliability**: Proper exact coordinate preservation for identical training points
+- **📐 High-Precision Applications**: Corrected distance comparisons for validation workflows
+
+**Previous v3.15.0 Features:**
 - **🌊 Stream-based HNSW serialization**: Zero temporary files with direct memory-to-file operations
 - **🔒 CRC32 data integrity**: Automatic corruption detection for both original and embedding space HNSW indices
 - **⚡ Deployment-grade reliability**: Production-ready model persistence with automatic validation
-- **🧪 Comprehensive testing**: 14/15 C# tests passing with stream-based HNSW validation
-- **📈 Enhanced test thresholds**: Realistic HNSW approximation limits (MSE < 0.5, error rate < 2%)
 
 ```cmd
 # Install via NuGet
-dotnet add package UMAPuwotSharp --version 3.15.0
+dotnet add package UMAPuwotSharp --version 3.16.0
 
 # Or clone and build the enhanced C# wrapper
 git clone https://github.com/78Spinoza/UMAP.git
@@ -1101,6 +1110,7 @@ HNSW acceleration works with multiple distance metrics:
 
 | Version | Release Date | Key Features | Performance |
 |---------|--------------|--------------|-------------|
+| **3.16.0** | 2025-10-02 | **Critical Euclidean distance fix**, Perfect pipeline consistency (MSE=0), All 15/15 tests passing, Exact coordinate preservation | Production reliability fix |
 | **3.15.0** | 2025-02-02 | **Stream-based HNSW serialization**, CRC32 data integrity validation, Zero temporary files, Enhanced test thresholds | Deployment-grade reliability |
 | **3.14.0** | 2025-02-01 | **Dual HNSW architecture**, AI pattern similarity search, Embedding space inference, 5-level outlier detection | Revolutionary AI capabilities |
 | **3.13.0** | 2025-01-22 | **16-bit quantization**, 85-95% file size reduction, HNSW reconstruction from quantized codes | Massive storage savings |
@@ -1117,7 +1127,7 @@ HNSW acceleration works with multiple distance metrics:
 // v2.x code (still supported)
 var embedding = model.Fit(data, embeddingDimension: 2);
 
-// v3.15.0 optimized code - stream-based HNSW with CRC32 validation
+// v3.16.0 optimized code - Euclidean distance fix + stream-based HNSW with CRC32 validation
 var embedding = model.Fit(data,
     embeddingDimension: 2,
     forceExactKnn: false);  // Enable HNSW for 50-2000x speedup!
@@ -1127,7 +1137,7 @@ model.SaveModel("model.umap");  // Stream-based serialization with integrity che
 var loadedModel = UMapModel.LoadModel("model.umap");  // Automatic corruption detection
 ```
 
-**Recommendation**: Upgrade to v3.15.0 for deployment-grade reliability with stream-based HNSW serialization and automatic CRC32 validation.
+**Recommendation**: Upgrade to v3.16.0 for critical Euclidean distance fix ensuring perfect pipeline consistency and deployment-grade reliability.
 
 ## References
 

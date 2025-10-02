@@ -2,6 +2,7 @@
 #include <vector>
 #include <random>
 #include <cmath>
+#include <cstring>
 #include "uwot_simple_wrapper.h"
 
 void progress_callback(const char* phase, int current, int total, float percent, const char* message) {

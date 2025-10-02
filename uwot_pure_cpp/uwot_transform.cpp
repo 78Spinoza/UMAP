@@ -107,8 +107,11 @@ namespace transform_utils {
                 int exact_match_idx = -1;
                 const float EXACT_MATCH_TOLERANCE = 1e-3f; // 1e-3 euclidean distance tolerance
 
+                // Save original ef value for restoration
+                size_t original_ef = model->original_space_index->ef_;
+
                 // Check if this point is identical to any training point (fast path for training data)
-                if (model->embedding_data && model->n_vertices > 0) {
+                if (!model->embedding.empty() && model->n_vertices > 0) {
                     // Use exact k-NN search with very small radius to find identical points
                     // This is much faster than brute force O(n) check
                     model->original_space_index->setEf(model->n_neighbors * 8); // Higher ef for exactness
@@ -123,7 +126,8 @@ namespace transform_utils {
                         // Apply metric-specific distance conversion
                         switch (model->metric) {
                         case UWOT_METRIC_EUCLIDEAN:
-                            // HNSW already returns actual Euclidean distance
+                            // L2Space returns squared distance - convert to actual Euclidean distance
+                            distance = std::sqrt(std::max(0.0f, distance));
                             break;
                         case UWOT_METRIC_COSINE:
                             distance = std::max(0.0f, std::min(2.0f, 1.0f + distance));
@@ -146,7 +150,7 @@ namespace transform_utils {
                 // STEP 1: Transform new data point to embedding space
                 if (found_exact_match) {
                     // PERFECT: Return exact fitted coordinates for identical training point
-                    const float* exact_embedding = &model->embedding_data[static_cast<size_t>(exact_match_idx) * static_cast<size_t>(model->embedding_dim)];
+                    const float* exact_embedding = &model->embedding[static_cast<size_t>(exact_match_idx) * static_cast<size_t>(model->embedding_dim)];
                     for (int d = 0; d < model->embedding_dim; d++) {
                         new_embedding[static_cast<size_t>(i) * static_cast<size_t>(model->embedding_dim) + static_cast<size_t>(d)] = exact_embedding[d];
                     }
@@ -155,7 +159,6 @@ namespace transform_utils {
                     // This follows the traditional UMAP transform method to get embedding coordinates
 
                     // Find neighbors in ORIGINAL space (for transform weights calculation)
-                size_t original_ef = model->original_space_index->ef_;
                 size_t boosted_ef = static_cast<size_t>(model->n_neighbors * 32);
                 boosted_ef = std::min(boosted_ef, static_cast<size_t>(400));
                 model->original_space_index->setEf(std::max(original_ef, boosted_ef));

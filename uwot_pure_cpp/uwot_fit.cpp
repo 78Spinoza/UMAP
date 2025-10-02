@@ -46,7 +46,7 @@ namespace fit_utils {
 
     // Helper function to compute comprehensive neighbor statistics
     void compute_neighbor_statistics(UwotModel* model, const std::vector<float>& normalized_data) {
-        if (!model->ann_index || model->n_vertices == 0) return;
+        if (!model->original_space_index || model->n_vertices == 0) return;
 
         std::vector<float> all_distances;
         all_distances.reserve(model->n_vertices * model->n_neighbors);
@@ -57,7 +57,7 @@ namespace fit_utils {
 
             try {
                 // Search for k+1 neighbors (includes self)
-                auto result = model->ann_index->searchKnn(query_point, model->n_neighbors + 1);
+                auto result = model->original_space_index->searchKnn(query_point, model->n_neighbors + 1);
 
                 // Skip the first result (self) and collect distances
                 int count = 0;
@@ -102,45 +102,45 @@ namespace fit_utils {
         std::sort(all_distances.begin(), all_distances.end());
 
         // Calculate statistics
-        model->min_neighbor_distance = all_distances.front();
+        model->min_original_distance = all_distances.front();
 
         // Mean calculation
         float sum = 0.0f;
         for (float dist : all_distances) {
             sum += dist;
         }
-        model->mean_neighbor_distance = sum / all_distances.size();
+        model->mean_original_distance = sum / all_distances.size();
 
         // Standard deviation calculation
         float sq_sum = 0.0f;
         for (float dist : all_distances) {
-            float diff = dist - model->mean_neighbor_distance;
+            float diff = dist - model->mean_original_distance;
             sq_sum += diff * diff;
         }
-        model->std_neighbor_distance = std::sqrt(sq_sum / all_distances.size());
+        model->std_original_distance = std::sqrt(sq_sum / all_distances.size());
 
         // Percentile calculations
         size_t p95_idx = static_cast<size_t>(0.95 * all_distances.size());
         size_t p99_idx = static_cast<size_t>(0.99 * all_distances.size());
-        model->p95_neighbor_distance = all_distances[std::min(p95_idx, all_distances.size() - 1)];
-        model->p99_neighbor_distance = all_distances[std::min(p99_idx, all_distances.size() - 1)];
+        model->p95_original_distance = all_distances[std::min(p95_idx, all_distances.size() - 1)];
+        model->p99_original_distance = all_distances[std::min(p99_idx, all_distances.size() - 1)];
 
         // Fix 3: Compute median neighbor distance
         size_t median_idx = all_distances.size() / 2;
-        model->median_neighbor_distance = all_distances[median_idx];
+        model->median_original_distance = all_distances[median_idx];
 
         // Fix 3: Set robust exact-match threshold for float32
         model->exact_match_threshold = 1e-3f / std::sqrt(static_cast<float>(model->n_dim));
 
         // Outlier thresholds
-        model->mild_outlier_threshold = model->mean_neighbor_distance + 2.5f * model->std_neighbor_distance;
-        model->extreme_outlier_threshold = model->mean_neighbor_distance + 4.0f * model->std_neighbor_distance;
+        model->mild_original_outlier_threshold = model->mean_original_distance + 2.5f * model->std_original_distance;
+        model->extreme_original_outlier_threshold = model->mean_original_distance + 4.0f * model->std_original_distance;
 
         printf("[STATS] Neighbor distances - min: %.4f, median: %.4f, mean: %.4f +/- %.4f, p95: %.4f, p99: %.4f\n",
-            model->min_neighbor_distance, model->median_neighbor_distance, model->mean_neighbor_distance,
-            model->std_neighbor_distance, model->p95_neighbor_distance, model->p99_neighbor_distance);
+            model->min_original_distance, model->median_original_distance, model->mean_original_distance,
+            model->std_original_distance, model->p95_original_distance, model->p99_original_distance);
         printf("[STATS] Outlier thresholds - mild: %.4f, extreme: %.4f\n",
-            model->mild_outlier_threshold, model->extreme_outlier_threshold);
+            model->mild_original_outlier_threshold, model->extreme_original_outlier_threshold);
     }
 
     // Distance metric implementations
@@ -149,7 +149,7 @@ namespace fit_utils {
     void build_knn_graph(const std::vector<float>& data, int n_obs, int n_dim,
         int n_neighbors, UwotMetric metric, UwotModel* model,
         std::vector<int>& nn_indices, std::vector<double>& nn_distances,
-        int force_exact_knn, uwot_progress_callback_v2 progress_callback) {
+        int force_exact_knn, uwot_progress_callback_v2 progress_callback, int autoHNSWParam) {
 
         nn_indices.resize(static_cast<size_t>(n_obs) * static_cast<size_t>(n_neighbors));
         nn_distances.resize(static_cast<size_t>(n_obs) * static_cast<size_t>(n_neighbors));
@@ -158,8 +158,8 @@ namespace fit_utils {
 
         // Enhanced HNSW optimization check with model availability
         bool can_use_hnsw = !force_exact_knn &&
-            model && model->space_factory && model->space_factory->can_use_hnsw() &&
-            model->ann_index && model->ann_index->getCurrentElementCount() > 0;
+            model && model->original_space_factory && model->original_space_factory->can_use_hnsw() &&
+            model->original_space_index && model->original_space_index->getCurrentElementCount() > 0;
 
         // k-NN strategy determined
 
@@ -173,7 +173,7 @@ namespace fit_utils {
                     const float* query_point = &data[static_cast<size_t>(i) * static_cast<size_t>(n_dim)];
 
                     // Search for k+1 neighbors (includes self)
-                    auto result = model->ann_index->searchKnn(query_point, n_neighbors + 1);
+                    auto result = model->original_space_index->searchKnn(query_point, n_neighbors + 1);
 
                     // Extract neighbors, skipping self
                     std::vector<std::pair<float, int>> neighbors;
@@ -261,8 +261,8 @@ namespace fit_utils {
             // Issue warnings for large datasets
             if (progress_callback) {
                 const char* reason = force_exact_knn ? "exact k-NN forced" :
-                    (!model || !model->space_factory) ? "HNSW not available" :
-                    !model->space_factory->can_use_hnsw() ? "unsupported metric for HNSW" : "HNSW index missing";
+                    (!model || !model->original_space_factory) ? "HNSW not available" :
+                    !model->original_space_factory->can_use_hnsw() ? "unsupported metric for HNSW" : "HNSW index missing";
 
                 if (n_obs > 10000 || (static_cast<long long>(n_obs) * n_obs * n_dim) > 1e8) {
                     // Estimate time for large datasets
@@ -437,7 +437,9 @@ namespace fit_utils {
         int M,
         int ef_construction,
         int ef_search,
-        int use_quantization) {
+        int use_quantization,
+        int random_seed,
+        int autoHNSWParam) {
 
         // Training function called
 
@@ -518,7 +520,7 @@ namespace fit_utils {
             }
 
             // CRITICAL FIX: Create HNSW index BEFORE k-NN graph so build_knn_graph can use it
-            if (!model->space_factory->create_space(metric, n_dim)) {
+            if (!model->original_space_factory->create_space(metric, n_dim)) {
                 return UWOT_ERROR_MEMORY;
             }
 
@@ -526,9 +528,9 @@ namespace fit_utils {
             size_t estimated_memory_mb = ((size_t)n_obs * model->hnsw_M * 4 * 2) / (1024 * 1024);
             // Creating HNSW index with calculated parameters
 
-            model->ann_index = std::make_unique<hnswlib::HierarchicalNSW<float>>(
-                model->space_factory->get_space(), n_obs, model->hnsw_M, model->hnsw_ef_construction);
-            model->ann_index->setEf(model->hnsw_ef_search);  // Set query-time ef parameter
+            model->original_space_index = std::make_unique<hnswlib::HierarchicalNSW<float>>(
+                model->original_space_factory->get_space(), n_obs, model->hnsw_M, model->hnsw_ef_construction);
+            model->original_space_index->setEf(model->hnsw_ef_search);  // Set query-time ef parameter
 
             // CRITICAL OPTIMIZATION: Apply quantization BEFORE creating HNSW index
             std::vector<float> hnsw_data = normalized_data; // Default: use original data
@@ -586,7 +588,7 @@ namespace fit_utils {
 
             // Add all points to HNSW index using quantized data (if enabled) or original data
             for (int i = 0; i < n_obs; i++) {
-                model->ann_index->addPoint(
+                model->original_space_index->addPoint(
                     &hnsw_data[static_cast<size_t>(i) * static_cast<size_t>(n_dim)],
                     static_cast<hnswlib::labeltype>(i));
             }
@@ -609,7 +611,7 @@ namespace fit_utils {
             }
 
             build_knn_graph(hnsw_data, n_obs, n_dim, n_neighbors, metric, model,
-                nn_indices, nn_distances, force_exact_knn, wrapped_callback);
+                nn_indices, nn_distances, force_exact_knn, wrapped_callback, autoHNSWParam);
 
             // Use uwot smooth_knn to compute weights
             std::vector<std::size_t> nn_ptr = { static_cast<std::size_t>(n_neighbors) };
@@ -849,7 +851,9 @@ namespace fit_utils {
         int M,
         int ef_construction,
         int ef_search,
-        int use_quantization) {
+        int use_quantization,
+        int random_seed,
+        int autoHNSWParam) {
 
         // Enhanced training function with v2 progress callbacks
 
@@ -891,7 +895,8 @@ namespace fit_utils {
 
             return fit_utils::uwot_fit_with_progress(model, data, n_obs, n_dim, embedding_dim,
                 n_neighbors, min_dist, spread, n_epochs, metric, embedding,
-                v1_callback, force_exact_knn, M, ef_construction, ef_search, use_quantization);
+                v1_callback, force_exact_knn, M, ef_construction, ef_search, use_quantization,
+                random_seed, autoHNSWParam);
 
         }
         catch (...) {
