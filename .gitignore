@@ -2,6 +2,7 @@
 bin/
 obj/
 build/
+build-debug/
 build-windows/
 build-linux/
 
