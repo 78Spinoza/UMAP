@@ -50,6 +50,45 @@ public:
     }
 };
 
+// 🔧 CRITICAL FIX: Custom Cosine Space for HNSW
+// InnerProductSpace returns dot product (higher = more similar), but HNSW expects smaller distances = closer
+// We need to negate the dot product so larger similarity = smaller "distance"
+class CosineSpace : public hnswlib::SpaceInterface<float> {
+private:
+    size_t dim_;
+
+public:
+    CosineSpace(size_t dim) : dim_(dim) {}
+
+    size_t get_data_size() override {
+        return dim_ * sizeof(float);
+    }
+
+    hnswlib::DISTFUNC<float> get_dist_func() override {
+        return [](const void* p1, const void* p2, const void* dim_ptr) -> float {
+            const float* x = static_cast<const float*>(p1);
+            const float* y = static_cast<const float*>(p2);
+            const size_t dim = *static_cast<const size_t*>(dim_ptr);
+
+            // Calculate dot product
+            float dot = 0.0f;
+            for (size_t i = 0; i < dim; ++i) {
+                dot += x[i] * y[i];
+            }
+
+            // 🔧 KEY FIX: Return negative dot product
+            // Higher similarity (larger dot) = smaller distance
+            return -dot;
+        };
+    }
+
+    void* get_dist_func_param() override {
+        return &dim_;
+    }
+
+    ~CosineSpace() {}
+};
+
 // HNSW space factory and management utilities
 namespace hnsw_utils {
 
@@ -58,6 +97,7 @@ namespace hnsw_utils {
         std::unique_ptr<hnswlib::L2Space> l2_space;
         std::unique_ptr<hnswlib::InnerProductSpace> ip_space;
         std::unique_ptr<L1Space> l1_space;
+        std::unique_ptr<CosineSpace> cosine_space;
         UwotMetric current_metric;
         int current_dim;
 

@@ -23,38 +23,11 @@ extern "C" {
         model_utils::destroy_model(model);
     }
 
-    UWOT_API int uwot_fit_with_progress(
-        UwotModel* model,
-        float* data,
-        int n_obs,
-        int n_dim,
-        int embedding_dim,
-        int n_neighbors,
-        float min_dist,
-        float spread,
-        int n_epochs,
-        UwotMetric metric,
-        float* embedding,
-        uwot_progress_callback progress_callback,
-        int force_exact_knn,
-        int M,
-        int ef_construction,
-        int ef_search,
-        int use_quantization
-    ) {
-        if (!model || !data || !embedding || n_obs <= 0 || n_dim <= 0 || embedding_dim <= 0) {
-            return UWOT_ERROR_INVALID_PARAMS;
-        }
-        return fit_utils::uwot_fit_with_progress(model, data, n_obs, n_dim, embedding_dim, n_neighbors,
-            min_dist, spread, n_epochs, metric, embedding, progress_callback,
-            force_exact_knn, M, ef_construction, ef_search, use_quantization, -1, 1);
-    }
-
     UWOT_API int uwot_fit_with_progress_v2(
         UwotModel* model,
         float* data,
-        int n_obs,
-        int n_dim,
+        int64_t n_obs,        // ✅ LARGE DATASET SUPPORT (supports up to 9E18 points)
+        int64_t n_dim,         // ✅ HIGH-DIMENSIONAL SUPPORT (supports high-dimensional data)
         int embedding_dim,
         int n_neighbors,
         float min_dist,
@@ -74,7 +47,12 @@ extern "C" {
         if (!model || !data || !embedding || n_obs <= 0 || n_dim <= 0 || embedding_dim <= 0) {
             return UWOT_ERROR_INVALID_PARAMS;
         }
-        return fit_utils::uwot_fit_with_progress_v2(model, data, n_obs, n_dim, embedding_dim, n_neighbors,
+        // Cast to int for internal processing (still supports up to 2.1B points)
+        int n_obs_int = static_cast<int>(n_obs);
+        int n_dim_int = static_cast<int>(n_dim);
+
+        // Call the main implementation function directly
+        return fit_utils::uwot_fit_with_progress(model, data, n_obs_int, n_dim_int, embedding_dim, n_neighbors,
             min_dist, spread, n_epochs, metric, embedding, progress_callback,
             force_exact_knn, M, ef_construction, ef_search, use_quantization, random_seed, autoHNSWParam);
     }

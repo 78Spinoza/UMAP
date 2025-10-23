@@ -72,7 +72,10 @@ namespace hnsw_utils {
                 return true;
 
             case UWOT_METRIC_COSINE:
-                ip_space = std::make_unique<hnswlib::InnerProductSpace>(n_dim);
+                // 🔧 CRITICAL FIX: Use custom CosineSpace instead of InnerProductSpace
+                // InnerProductSpace returns dot product (higher = more similar), but HNSW expects smaller distances = closer
+                // Our CosineSpace returns -dot_product so larger similarity = smaller distance
+                cosine_space = std::make_unique<CosineSpace>(n_dim);
                 return true;
 
             case UWOT_METRIC_MANHATTAN:
@@ -93,7 +96,8 @@ namespace hnsw_utils {
         case UWOT_METRIC_EUCLIDEAN:
             return l2_space.get();
         case UWOT_METRIC_COSINE:
-            return ip_space.get();
+            // 🔧 CRITICAL FIX: Return custom CosineSpace instead of InnerProductSpace
+            return cosine_space.get();
         case UWOT_METRIC_MANHATTAN:
             return l1_space.get();
         default:
@@ -444,14 +448,13 @@ namespace hnsw_utils {
     // Temporary normalization utilities (will be moved to separate module later)
     namespace NormalizationPipeline {
         int determine_normalization_mode(UwotMetric metric) {
-            // Enhanced logic for proper HNSW compatibility
+            // CRITICAL: UMAP should work on RAW data, not normalized!
+            // Z-score normalization destroys the distance relationships UMAP needs
             if (metric == UWOT_METRIC_COSINE) {
-                return 2; // L2 normalization for cosine (HNSW InnerProductSpace requires unit vectors)
+                return 2; // L2 normalization for cosine (required for inner product space)
             }
-            else if (metric == UWOT_METRIC_CORRELATION) {
-                return 0; // No normalization for correlation
-            }
-            return 1; // Use z-score normalization for other metrics
+            // All other metrics: NO normalization - use raw data
+            return 0; // No normalization
         }
 
         bool normalize_data_consistent(std::vector<float>& input_data, std::vector<float>& output_data,
@@ -531,4 +534,5 @@ namespace hnsw_utils {
             return true;
         }
     }
-}
+
+  }

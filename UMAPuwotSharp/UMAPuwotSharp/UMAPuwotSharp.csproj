@@ -12,12 +12,12 @@
     <!-- Enhanced NuGet metadata -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>UMAPuwotSharp</PackageId>
-    <Version>3.16.0</Version>
+    <Version>3.18.0</Version>
     <Authors>Amin Gholiha</Authors>
     <Company>ID Soft AB</Company>
     <Product>UMAPuwotSharp Enhanced with HNSW</Product>
     <Title>UMAP for .NET with HNSW Optimization &amp; AI Safety</Title>
-    <Description>Revolutionary UMAP library with HNSW optimization providing 50-2000x faster transforms and production safety features. Features: HNSW (Hierarchical Navigable Small World) optimization, smart dimension-based defaults (2D: spread=5.0, min_dist=0.35), 5-level outlier detection (Normal to No Man's Land), 80% memory reduction, AI/ML data validation, arbitrary dimensions (1D-50D), multiple metrics, enhanced progress reporting, and complete model persistence. Perfect for production AI pipelines requiring data quality assessment.</Description>
+    <Description>Revolutionary UMAP library with HNSW optimization and Phase 4 large dataset support. Features: HNSW optimization with memory reduction, unified API with int64_t support for 1M+ point datasets, double precision gradients for enhanced numerical stability, 5-level outlier detection (Normal to No Man's Land), AI/ML data validation, arbitrary dimensions (1D-50D), multiple metrics, enhanced progress reporting, and complete model persistence. Perfect for production AI pipelines and large-scale machine learning applications.</Description>
     <PackageTags>umap;uwot;hnsw;ai-safety;outlier-detection;dimensionality-reduction;machine-learning;embedding;manifold-learning;production-ml;data-validation;nearest-neighbors;performance-optimization;memory-efficient;multi-dimensional;progress-reporting;model-persistence</PackageTags>
     <RepositoryUrl>https://github.com/78Spinoza/UMAP</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -25,7 +25,7 @@
     <PackageProjectUrl>https://github.com/78Spinoza/UMAP</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageReleaseNotes><![CDATA[
-🚀 CRITICAL FIX - UMAP v3.16.0: Euclidean Distance Transform Bug Fix
+🚀 MAJOR RELEASE - UMAP v3.18.0: Phase 4 Large Dataset Support & Unified API
 
 🔥 CRITICAL BUG FIX:
 - ✅ Fixed exact match detection for Euclidean metric: L2Space returns squared distance, now properly converted with sqrt()

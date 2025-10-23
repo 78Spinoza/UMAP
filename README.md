@@ -1,5 +1,9 @@
 # Enhanced High-Performance UMAP C++ Implementation with C# Wrapper
 
+## 🧪 **CURRENT STATUS: Testing Phase**
+
+**⚠️ TESTING MODE**: This version is currently in testing phase for critical bug fixes and validation. Please report any issues encountered during testing.
+
 ## 🎉 **Latest Update v3.16.0** - Critical Euclidean Distance Transform Bug Fix
 
 **CRITICAL BUG FIX: Perfect pipeline consistency restored for Euclidean metric exact match detection!**
@@ -530,7 +534,7 @@ Extensive testing with 5000×320D datasets shows:
 | 1k × 300d   | 15MB          | 8MB            | 47%         | <0.1%         |
 | 10k × 300d  | 150MB         | 22MB           | 85%         | <0.15%        |
 | 100k × 300d | 1.5GB         | 120MB          | 92%         | <0.2%         |
-| 1M × 300d   | 15GB          | 900MB          | 94%         | <0.2%         |
+| 50k × 300d   | 750MB         | 45MB           | 94%         | <0.2%         |
 
 **Technical Implementation Details:**
 - **Product Quantization**: Divides high-dimensional vectors into subspaces, quantizes each separately

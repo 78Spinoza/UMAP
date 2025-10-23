@@ -30,7 +30,7 @@ extern "C" {
 #define UWOT_ERROR_CRC_MISMATCH -7
 
 // Version information
-#define UWOT_WRAPPER_VERSION_STRING "3.17.0"
+#define UWOT_WRAPPER_VERSION_STRING "3.32.0"
 
 // Distance metrics
     typedef enum {
@@ -79,29 +79,11 @@ extern "C" {
     UWOT_API UwotModel* uwot_create();
     UWOT_API void uwot_destroy(UwotModel* model);
 
-    // UNIFIED TRAINING PIPELINE - All functions use same core implementation
-    UWOT_API int uwot_fit_with_progress(UwotModel* model,
-        float* data,
-        int n_obs,
-        int n_dim,
-        int embedding_dim,
-        int n_neighbors,
-        float min_dist,
-        float spread,
-        int n_epochs,
-        UwotMetric metric,
-        float* embedding,
-        uwot_progress_callback progress_callback,
-        int force_exact_knn = 0,
-        int M = -1,
-        int ef_construction = -1,
-        int ef_search = -1,
-        int use_quantization = 0);
-
+    // UNIFIED TRAINING PIPELINE - Single function with int64_t support and v2 callbacks
     UWOT_API int uwot_fit_with_progress_v2(UwotModel* model,
         float* data,
-        int n_obs,
-        int n_dim,
+        int64_t n_obs,        // ✅ LARGE DATASET SUPPORT (supports up to 9E18 points)
+        int64_t n_dim,         // ✅ HIGH-DIMENSIONAL SUPPORT (supports high-dimensional data)
         int embedding_dim,
         int n_neighbors,
         float min_dist,
@@ -110,28 +92,6 @@ extern "C" {
         UwotMetric metric,
         float* embedding,
         uwot_progress_callback_v2 progress_callback,
-        int force_exact_knn = 0,
-        int M = -1,
-        int ef_construction = -1,
-        int ef_search = -1,
-        int use_quantization = 0,
-        int random_seed = -1,
-        int autoHNSWParam = 1);
-
-    // Thread-safe training with user data pointer
-    UWOT_API int uwot_fit_with_progress_v3(UwotModel* model,
-        float* data,
-        int n_obs,
-        int n_dim,
-        int embedding_dim,
-        int n_neighbors,
-        float min_dist,
-        float spread,
-        int n_epochs,
-        UwotMetric metric,
-        float* embedding,
-        uwot_progress_callback_v3 progress_callback,
-        void* user_data = nullptr,
         int force_exact_knn = 0,
         int M = -1,
         int ef_construction = -1,

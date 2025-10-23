@@ -38,7 +38,7 @@ namespace fit_utils {
     void convert_to_edges(
         const std::vector<int>& nn_indices,
         const std::vector<double>& nn_weights,
-        int n_obs, int n_neighbors,
+        int n_obs, int n_neighbors, int n_epochs,
         std::vector<unsigned int>& heads,
         std::vector<unsigned int>& tails,
         std::vector<double>& weights
@@ -58,31 +58,11 @@ namespace fit_utils {
     // Compute neighbor statistics for safety analysis
     void compute_neighbor_statistics(UwotModel* model, const std::vector<float>& normalized_data);
 
+    // Calculate epochs per sample for intelligent edge scheduling
+    std::vector<float> make_epochs_per_sample(const std::vector<double>& weights, int n_epochs);
+
     // Main fit function with progress reporting
     int uwot_fit_with_progress(
-        UwotModel* model,
-        float* data,
-        int n_obs,
-        int n_dim,
-        int embedding_dim,
-        int n_neighbors,
-        float min_dist,
-        float spread,
-        int n_epochs,
-        UwotMetric metric,
-        float* embedding,
-        uwot_progress_callback progress_callback,
-        int force_exact_knn,
-        int M,
-        int ef_construction,
-        int ef_search,
-        int use_quantization,
-        int random_seed = -1,
-        int autoHNSWParam = 1
-    );
-
-    // Enhanced v2 function with loss reporting
-    int uwot_fit_with_progress_v2(
         UwotModel* model,
         float* data,
         int n_obs,
@@ -99,11 +79,12 @@ namespace fit_utils {
         int M,
         int ef_construction,
         int ef_search,
-        int use_quantization = 0,
+        int use_quantization,
         int random_seed = -1,
         int autoHNSWParam = 1
     );
 
+    
     // Helper functions for uwot_fit refactoring
     namespace fit_helpers {
         // HNSW recall validation and auto-tuning

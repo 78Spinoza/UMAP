@@ -7,11 +7,11 @@
 
 // Core UMAP model structure
 struct UwotModel {
-    // Model parameters
-    int n_vertices;
-    int n_dim;
-    int embedding_dim;
-    int n_neighbors;
+    // Model parameters - LARGE DATASET SUPPORT
+    int64_t n_vertices;        // ✅ Up to 9E18 points (was int)
+    int64_t n_dim;             // ✅ High-dimensional support (was int)
+    int32_t embedding_dim;     // ✅ Keep int32 (rarely > 2B)
+    int32_t n_neighbors;       // ✅ Keep int32 (rarely > 2B)
     float min_dist;
     float spread; // UMAP spread parameter (controls global scale)
     UwotMetric metric;
@@ -31,10 +31,24 @@ struct UwotModel {
     bool use_normalization;
     int normalization_mode;
 
-    // Graph structure using uwot types
+    // Graph structure - EXACT umappp format
+    // Per-observation edge lists (umappp structure)
+    std::vector<std::size_t> cumulative_num_edges;  // cumulative_num_edges[i] = start index for observation i's edges
+                                                     // cumulative_num_edges[i+1] = end index (exclusive)
+                                                     // Size = n_vertices + 1
+    std::vector<unsigned int> edge_targets;         // Flat list of target vertices
+    std::vector<double> edge_weights;               // Flat list of edge weights
+
+    // Legacy flat edge list (for compatibility)
     std::vector<unsigned int> positive_head;
     std::vector<unsigned int> positive_tail;
     std::vector<double> positive_weights;  // uwot uses double for weights
+
+    // ADD THESE FIELDS FOR EPOCH SCHEDULING (epochs_per_sample algorithm)
+    std::vector<float> epochs_per_sample;          // When to process each edge
+    std::vector<float> epoch_of_next_sample;        // Next epoch to process each edge
+    std::vector<float> epoch_of_next_negative_sample; // Next epoch for negative sampling
+    // NOTE: epochs_per_negative_sample is NOT stored - calculated dynamically as epochs_per_sample[j] / negative_sample_rate
 
     // Final embedding
     std::vector<float> embedding;
