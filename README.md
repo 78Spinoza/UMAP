@@ -1,8 +1,10 @@
 # Enhanced High-Performance UMAP C++ Implementation with C# Wrapper
 
-## 🧪 **CURRENT STATUS: Testing Phase**
+## 🧪 **CURRENT STATUS: Known Issues - Under Active Development**
 
-**⚠️ TESTING MODE**: This version is currently in testing phase for critical bug fixes and validation. Please report any issues encountered during testing.
+**⚠️ WARNING: UMAP IMPLEMENTATION NOT WORKING CORRECTLY**: The current UMAP optimization algorithm produces poor quality visualizations. We are actively debugging and fixing the epoch scheduling and negative sampling issues. The 10K mammoth dataset shows severe anatomical deformation (body split into 24 pieces, scattered limbs).
+
+**DO NOT USE IN PRODUCTION** until the visualization quality issues are resolved. We are implementing proper epoch scheduling from the umappp reference implementation to fix the root cause.
 
 ## 🎉 **Latest Update v3.16.0** - Critical Euclidean Distance Transform Bug Fix
 
