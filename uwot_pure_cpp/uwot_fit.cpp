@@ -1417,11 +1417,8 @@ namespace fit_utils {
             // CRITICAL: Setup epoch scheduling (umappp approach)
             // Edges with higher weights are processed more frequently
             const float negative_sample_rate = 5.0f;
-            std::vector<float> epochs_per_sample(model->positive_weights.size());
-            std::vector<float> epoch_of_next_sample(model->positive_weights.size());
-            std::vector<float> epoch_of_next_negative_sample(model->positive_weights.size());
 
-            // Find max weight for scheduling
+            // Find max weight for scheduling (umappp line 51-57)
             float max_weight = 0.0f;
             for (size_t i = 0; i < model->positive_weights.size(); i++) {
                 if (model->positive_weights[i] > max_weight) {
@@ -1429,13 +1426,32 @@ namespace fit_utils {
                 }
             }
 
-            // Calculate epochs_per_sample for each edge (higher weight = more frequent updates)
-            // CRITICAL: epoch_of_next_sample starts at epochs_per_sample[i], NOT 0!
+            // CRITICAL: Filter edges by weight threshold (umappp line 65-70)
+            // Only process edges with weight >= max_weight / n_epochs
+            const float limit = max_weight / static_cast<float>(n_epochs);
+
+            std::vector<size_t> filtered_edge_indices;  // Maps to original edge indices
+            std::vector<float> epochs_per_sample;
+            std::vector<float> epoch_of_next_sample;
+            std::vector<float> epoch_of_next_negative_sample;
+
+            filtered_edge_indices.reserve(model->positive_weights.size());
+            epochs_per_sample.reserve(model->positive_weights.size());
+
             for (size_t i = 0; i < model->positive_weights.size(); i++) {
-                float weight = std::max(static_cast<float>(model->positive_weights[i]), 1e-6f);
-                epochs_per_sample[i] = max_weight / weight;
-                epoch_of_next_sample[i] = epochs_per_sample[i];  // umappp line 78: start at this value
-                epoch_of_next_negative_sample[i] = epochs_per_sample[i] / negative_sample_rate;  // umappp line 81
+                float weight = static_cast<float>(model->positive_weights[i]);
+                if (weight >= limit) {  // umappp line 70: edge filtering
+                    filtered_edge_indices.push_back(i);
+                    float eps = max_weight / std::max(weight, 1e-6f);
+                    epochs_per_sample.push_back(eps);
+                }
+            }
+
+            // Initialize epoch scheduling (umappp lines 79-83)
+            epoch_of_next_sample = epochs_per_sample;  // Start at epochs_per_sample
+            epoch_of_next_negative_sample = epochs_per_sample;
+            for (auto& e : epoch_of_next_negative_sample) {
+                e /= negative_sample_rate;
             }
 
             // Direct UMAP optimization implementation with progress reporting
@@ -1482,12 +1498,14 @@ namespace fit_utils {
 
 
                 // Process positive edges (attractive forces)
+                // CRITICAL: Only process filtered edges (umappp line 67-73)
 
-                for (size_t edge_idx = 0; edge_idx < model->positive_head.size(); edge_idx++) {
+                for (size_t filt_idx = 0; filt_idx < filtered_edge_indices.size(); filt_idx++) {
 
                     // CRITICAL: Check if this edge should be processed in this epoch (umappp line 143)
-                    if (epoch_of_next_sample[edge_idx] > epoch) continue;
+                    if (epoch_of_next_sample[filt_idx] > epoch) continue;
 
+                    size_t edge_idx = filtered_edge_indices[filt_idx];  // Map to original edge index
                     size_t i = static_cast<size_t>(model->positive_head[edge_idx]);
 
                     size_t j = static_cast<size_t>(model->positive_tail[edge_idx]);
@@ -1573,8 +1591,8 @@ namespace fit_utils {
 
 
                     // CRITICAL: Dynamic negative sampling (umappp line 163)
-                    float epochs_per_negative_sample = epochs_per_sample[edge_idx] / negative_sample_rate;
-                    int num_neg_samples = static_cast<int>((epoch - epoch_of_next_negative_sample[edge_idx]) / epochs_per_negative_sample);
+                    float epochs_per_negative_sample = epochs_per_sample[filt_idx] / negative_sample_rate;
+                    int num_neg_samples = static_cast<int>((epoch - epoch_of_next_negative_sample[filt_idx]) / epochs_per_negative_sample);
 
                     for (int neg = 0; neg < num_neg_samples; neg++) {
 
@@ -1659,8 +1677,8 @@ namespace fit_utils {
                     }
 
                     // CRITICAL: Update epoch scheduling counters (umappp lines 180-181)
-                    epoch_of_next_sample[edge_idx] += epochs_per_sample[edge_idx];
-                    epoch_of_next_negative_sample[edge_idx] += num_neg_samples * epochs_per_negative_sample;
+                    epoch_of_next_sample[filt_idx] += epochs_per_sample[filt_idx];
+                    epoch_of_next_negative_sample[filt_idx] += num_neg_samples * epochs_per_negative_sample;
 
                 }
 
