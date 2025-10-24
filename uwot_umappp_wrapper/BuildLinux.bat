@@ -32,6 +32,59 @@ if !ERRORLEVEL! NEQ 0 (
 
 echo [PASS] Linux build completed
 
+REM Copy Linux .so file to C# project
+echo.
+echo Copying Linux library to C# project...
+
+REM Try libuwot_final.so first (our guaranteed backup from Docker)
+if exist "build-linux\libuwot_final.so" (
+    for %%A in ("build-linux\libuwot_final.so") do (
+        if %%~zA GTR 1000 (
+            copy "build-linux\libuwot_final.so" "..\UMAPuwotSharp\UMAPuwotSharp\libuwot.so" >nul
+            echo [COPY] libuwot_final.so copied as libuwot.so to C# project folder
+            goto :linux_copy_done
+        )
+    )
+)
+
+REM Try libuwot_backup.so
+if exist "build-linux\libuwot_backup.so" (
+    for %%A in ("build-linux\libuwot_backup.so") do (
+        if %%~zA GTR 1000 (
+            copy "build-linux\libuwot_backup.so" "..\UMAPuwotSharp\UMAPuwotSharp\libuwot.so" >nul
+            echo [COPY] libuwot_backup.so copied as libuwot.so to C# project folder
+            goto :linux_copy_done
+        )
+    )
+)
+
+REM Check for versioned .so files
+for %%F in (build-linux\libuwot.so.*.*.*) do (
+    if exist "%%F" (
+        for %%A in ("%%F") do (
+            if %%~zA GTR 1000 (
+                copy "%%F" "..\UMAPuwotSharp\UMAPuwotSharp\libuwot.so" >nul
+                echo [COPY] %%~nxF copied as libuwot.so to C# project folder
+                goto :linux_copy_done
+            )
+        )
+    )
+)
+
+REM Try libuwot.so directly
+if exist "build-linux\libuwot.so" (
+    for %%A in ("build-linux\libuwot.so") do (
+        if %%~zA GTR 1000 (
+            copy "build-linux\libuwot.so" "..\UMAPuwotSharp\UMAPuwotSharp\libuwot.so" >nul
+            echo [COPY] libuwot.so copied to C# project folder
+            goto :linux_copy_done
+        )
+    )
+)
+
+echo [WARN] No suitable Linux library found to copy
+
+:linux_copy_done
 echo.
 echo ==========================================
 echo   Enhanced Linux Build Summary

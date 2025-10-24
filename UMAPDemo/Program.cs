@@ -291,7 +291,7 @@ namespace UMAPDemo
                 nNeighbors: 25,  // Test with 25 instead of 50 - less smoothing
                 minDist: 0.35f,
                 spread: 1.0f,
-                nEpochs: 500,
+                nEpochs: 300,  // Standard UMAP epochs for 10k dataset
                 metric: DistanceMetric.Euclidean,
                 forceExactKnn: false,  // Use high-quality HNSW for speed
                 autoHNSWParam: false,
@@ -995,7 +995,9 @@ HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.
                 var experimentDir = Path.Combine(ResultsDir, "n_neighbors_experiments");
                 Directory.CreateDirectory(experimentDir);
                 var outputPath = Path.Combine(experimentDir, $"neighbors_{nNeighbors:D2}.png");
-                var title = $"n_neighbors Experiment: k={nNeighbors}, min_dist=0.1\n" + BuildVisualizationTitle(model, "n_neighbors Experiment");
+                // Get actual model parameters - NO HARDCODING!
+                var modelInfo = model.ModelInfo;
+                var title = $"n_neighbors Experiment: k={modelInfo.Neighbors}, min_dist={modelInfo.MinimumDistance:F2}\n" + BuildVisualizationTitle(model, "n_neighbors Experiment");
                 Visualizer.PlotMammothUMAP(doubleEmbedding, labels, title, outputPath, paramInfo);
                 Console.WriteLine($"      📈 Saved: {Path.GetFileName(outputPath)}");
             }
@@ -1141,7 +1143,7 @@ HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.
                     data: floatData,
                     progressCallback: CreatePrefixedCallback($"MD={minDist:F2}"),
                     embeddingDimension: 2,
-                    nNeighbors: 45,  // Fixed to 45 as requested
+                    nNeighbors: 120,  // Updated to 120 as requested
                     minDist: minDist,
                     spread: 1.0f,
                     nEpochs: 300,
