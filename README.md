@@ -1,10 +1,99 @@
 # Enhanced High-Performance UMAP C++ Implementation with C# Wrapper
 
-## 🧪 **CURRENT STATUS: Known Issues - Under Active Development**
+## ✅ **CURRENT STATUS: WORKING SOLUTION with Real umappp Implementation**
 
-**⚠️ WARNING: UMAP IMPLEMENTATION NOT WORKING CORRECTLY**: The current UMAP optimization algorithm produces poor quality visualizations. We are actively debugging and fixing the epoch scheduling and negative sampling issues. The 10K mammoth dataset shows severe anatomical deformation (body split into 24 pieces, scattered limbs).
+**🎉 SOLVED: Verified working solution using https://github.com/libscran/umappp reference implementation!**
 
-**DO NOT USE IN PRODUCTION** until the visualization quality issues are resolved. We are implementing proper epoch scheduling from the umappp reference implementation to fix the root cause.
+The project now includes a **real umappp integration** with proper spectral initialization that solves the fragmentation issues. The mammoth dataset can now be visualized as a single, coherent structure instead of fragmented pieces.
+
+### 🔥 **Key Achievement: Real umappp Integration**
+
+We have successfully incorporated the **libscran/umappp** reference implementation, which provides:
+
+- **✅ Spectral initialization**: Non-linear manifold-aware initialization using graph Laplacian eigenvectors
+- **✅ Proper epoch scheduling**: Correct optimization with balanced positive/negative sampling
+- **✅ Superior embeddings**: Better preservation of complex 3D structures like the mammoth dataset
+- **✅ HNSW-knncolle bridge**: Custom interface connecting our HNSW optimization with umappp's expected neighbor search interface
+- **✅ Complete C# compatibility**: Maintains full API compatibility while using superior algorithms underneath
+
+## 🏗️ **Project Structure with Real umappp Implementation**
+
+### **Current Implementation Architecture**
+
+The project now contains two different UMAP implementations:
+
+```
+├── uwot_umappp_wrapper/          # 🎯 PRIMARY: Real umappp implementation (RECOMMENDED)
+│   ├── Core umappp integration
+│   │   ├── umappp.hpp           # Main umappp library headers
+│   │   ├── Options.hpp          # Configuration and parameters
+│   │   ├── Status.hpp           # Status and error handling
+│   │   ├── initialize.hpp       # ✅ SPECTRAL INITIALIZATION (solves fragmentation!)
+│   │   └── optimize_layout.hpp  # Advanced optimization algorithms
+│   ├── HNSW-knncolle bridge
+│   │   ├── uwot_hnsw_knncolle.hpp  # Custom bridge interface
+│   │   └── hnswlib headers         # HNSW optimization integration
+│   ├── Enhanced wrapper files
+│   │   ├── uwot_fit.cpp/.h          # Training with umappp algorithms
+│   │   ├── uwot_simple_wrapper.cpp/.h # Main API interface
+│   │   └── All supporting modules (persistence, transform, etc.)
+│   └── CMakeLists.txt               # Build system with umappp dependencies
+│
+└── uwot_pure_cpp/               # ⚠️ LEGACY: Original implementation (DEPRECATED)
+    ├── Reason: Fragmentation issues with complex 3D structures
+    ├── Status: Moved 39 unused files to tmp/ folder for cleanup
+    └── Purpose: Kept for reference and future comparison only
+```
+
+### **Why We Switched to Real umappp**
+
+**Problem with Original Implementation:**
+- The mammoth dataset (complex 3D structure) was fragmenting into 24+ scattered pieces
+- Random initialization was insufficient for preserving complex manifold topology
+- Poor epoch scheduling led to suboptimal optimization convergence
+
+**Solution with Real umappp:**
+- **Spectral Initialization**: Uses graph Laplacian eigenvectors for manifold-aware starting positions
+- **Proper Optimization**: Correct epoch scheduling with balanced positive/negative sampling
+- **Better Topology Preservation**: Specifically designed to handle complex non-linear structures
+
+### **HNSW-knncolle Bridge Architecture**
+
+To maintain our HNSW optimization benefits while using umappp, we created a custom bridge:
+
+```cpp
+// Custom bridge class that implements knncolle interface for HNSW
+template<typename Index_, typename Float_>
+class HnswPrebuilt : public knncolle::Prebuilt<Index_, Float_, Float_> {
+    // Bridges our existing HNSW optimization with umappp's expected neighbor search interface
+    void search(Index_ i, Index_ k, std::vector<Index_>* indices,
+               std::vector<Float_>* distances) const override {
+        auto result = hnsw_index_->searchKnn(...);
+    }
+};
+```
+
+**Benefits of This Architecture:**
+- ✅ **Keep HNSW performance**: 50-2000x faster transforms
+- ✅ **Get umappp quality**: Superior spectral initialization and optimization
+- ✅ **Maintain API compatibility**: Existing C# code works unchanged
+- ✅ **Future-proof**: Easy to upgrade as umappp evolves
+
+### **How to Use the Real umappp Implementation**
+
+The real umappp implementation is located in `uwot_umappp_wrapper/` and should be built instead of the legacy implementation:
+
+```bash
+# Build the real umappp implementation
+cd uwot_umappp_wrapper
+mkdir build && cd build
+cmake .. -G "Visual Studio 17 2022" -A x64
+cmake --build . --config Release
+
+# The resulting DLL will have the real umappp algorithms
+```
+
+**Note**: The C# API remains identical, so existing code continues to work but now benefits from superior umappp algorithms under the hood.
 
 ## 🎉 **Latest Update v3.16.0** - Critical Euclidean Distance Transform Bug Fix
 
@@ -756,20 +845,32 @@ var embedding = model.FitWithProgress(
 
 ## Projects Structure
 
-### uwot_pure_cpp
-Enhanced standalone C++ UMAP library extracted and adapted from the uwot R package:
+### 🎯 uwot_umappp_wrapper (PRIMARY - RECOMMENDED)
+**Real umappp implementation** with spectral initialization solving fragmentation issues:
 
-- **Model Training**: Complete UMAP algorithm with customizable parameters
-- **HNSW Optimization**: 50-2000x faster neighbor search using hnswlib
-- **Production Safety**: 5-level outlier detection and confidence scoring
+- **✅ Real umappp Integration**: Complete libscran/umappp reference implementation
+- **✅ Spectral Initialization**: Manifold-aware graph Laplacian eigenvector initialization
+- **✅ Superior Optimization**: Proper epoch scheduling and balanced sampling
+- **✅ HNSW-knncolle Bridge**: Custom interface maintaining HNSW performance benefits
+- **✅ Fragmentation Solution**: Specifically handles complex 3D structures like mammoth dataset
+- **Complete UMAP Algorithm**: Full feature parity with enhanced optimization
 - **Multiple Distance Metrics**: Euclidean, Cosine, Manhattan, Correlation, Hamming
 - **Arbitrary Dimensions**: Support for 1D to 50D embeddings
-- **Progress Reporting**: Real-time training feedback with callback support
-- **Model Persistence**: Save/load functionality using efficient binary format with HNSW indices
-- **Transform Support**: Embed new data points using pre-trained models with sub-millisecond speed
-- **Cross-Platform**: Builds on Windows (Visual Studio) and Linux (GCC/Docker)
-- **Memory Safe**: Proper resource management and error handling
-- **OpenMP Support**: Parallel processing for improved performance
+- **Progress Reporting**: Real-time training feedback with enhanced callbacks
+- **Model Persistence**: Save/load with HNSW indices and CRC32 validation
+- **Transform Support**: Sub-millisecond embedding of new data points
+- **Cross-Platform**: Windows (Visual Studio) and Linux (GCC/Docker) builds
+- **Production Ready**: Comprehensive testing and validation
+
+### ⚠️ uwot_pure_cpp (LEGACY - DEPRECATED)
+**Original implementation** with fragmentation issues - kept for reference only:
+
+- **Status**: ABANDONED due to fragmentation problems with complex 3D structures
+- **Issues**: Mammoth dataset splits into 24+ scattered pieces
+- **Cause**: Random initialization insufficient for complex manifold preservation
+- **Cleanup**: 39 unused debug/test files moved to tmp/ folder
+- **Purpose**: Reference comparison and future debugging only
+- **Recommendation**: Use uwot_umappp_wrapper instead for all new development
 
 ### UMAPuwotSharp
 Enhanced production-ready C# wrapper providing .NET integration:
@@ -918,23 +1019,32 @@ var safeCount = safetyResults.Count(r => r.IsProductionReady);
 Console.WriteLine($"Safety analysis: {safeCount}/{safetyResults.Length} samples production-ready");
 ```
 
-### Building Enhanced Version from Source
+### Building Real umappp Implementation from Source
 
-If you want to build the enhanced native libraries yourself:
+**⚠️ IMPORTANT**: Build the real umappp implementation (recommended) instead of the legacy version:
 
-**Cross-platform enhanced build (production-ready):**
+**Real umappp build (solves fragmentation issues):**
+```cmd
+cd uwot_umappp_wrapper
+mkdir build && cd build
+cmake .. -G "Visual Studio 17 2022" -A x64
+cmake --build . --config Release
+```
+
+This builds the real umappp implementation with:
+- ✅ **Spectral initialization**: Manifold-aware starting positions (solves mammoth fragmentation!)
+- ✅ **Proper optimization**: Correct epoch scheduling from reference implementation
+- ✅ **HNSW-knncolle bridge**: Maintains 50-2000x faster transforms
+- ✅ **Superior topology preservation**: Better for complex 3D structures
+- ✅ **Complete umappp features**: All algorithms from libscran/umappp reference
+
+**Legacy build (deprecated - for reference only):**
 ```cmd
 cd uwot_pure_cpp
 BuildDockerLinuxWindows.bat
 ```
 
-This builds the enhanced version with all new features:
-- HNSW optimization for 50-2000x faster transforms
-- Multi-dimensional support (1D-50D)
-- Multiple distance metrics
-- Progress reporting infrastructure
-- Production safety features with outlier detection
-- Enhanced model persistence format with HNSW indices
+⚠️ **Note**: The legacy implementation has known fragmentation issues with complex datasets like the mammoth. Use the real umappp implementation for production applications.
 
 ## Performance and Compatibility
 
