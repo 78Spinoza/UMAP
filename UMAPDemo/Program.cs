@@ -362,16 +362,7 @@ namespace UMAPDemo
             var (data2, labels2) = DataLoaders.SampleRandomPoints(data, labels, requestedSamples);
             Console.WriteLine($"   Subsampled: {data2.GetLength(0)} points, {data2.GetLength(1)} dimensions");
 
-            // Set standard UMAP parameters based on dataset size
-            int actualSamples = data2.GetLength(0);
-
-            Console.WriteLine($"   📊 UMAP Parameter Selection:");
-            Console.WriteLine($"      Dataset size: {actualSamples:N0} samples");
-            Console.WriteLine($"      Chosen n_neighbors: 35 (optimized for hairy mammoth)");
-            Console.WriteLine($"      Chosen min_dist: 0.2 (balanced clustering)");
-            Console.WriteLine($"      Chosen spread: 1.0 (global scale)");
-            Console.WriteLine($"      Reasoning: Optimized parameters for large-scale anatomical structure with 200k samples");
-            Console.WriteLine($"      ✅ Using n_neighbors=35, min_dist=0.2, spread=1.0 for optimal visualization");
+            // Parameters are set in the FitWithProgress call below - no auto-optimization
 
             // Convert double[,] to float[,] for UMAP API
             int nSamples2 = data2.GetLength(0);
@@ -387,7 +378,7 @@ namespace UMAPDemo
                 data: floatData2,
                 progressCallback: UnifiedProgressCallback,
                 embeddingDimension: 2,
-                nNeighbors: 80,        // Higher for 100k dataset as requested
+                nNeighbors: 120,       // Updated to 120 as requested
                 minDist: 0.35f,        // Updated to 0.35 as requested
                 spread: 1.0f,
                 nEpochs: 500,

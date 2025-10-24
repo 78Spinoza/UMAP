@@ -29,6 +29,16 @@ namespace transform_utils {
             return UWOT_ERROR_INVALID_PARAMS;
         }
 
+        // Additional validation: Ensure model has proper dimensions
+        if (model->embedding_dim <= 0 || model->n_vertices <= 0) {
+            return UWOT_ERROR_INVALID_PARAMS;
+        }
+
+        // Additional validation: Ensure embedding array exists and has correct size
+        if (model->embedding.empty()) {
+            return UWOT_ERROR_INVALID_PARAMS;
+        }
+
         // Transform operation starting
 
         try {
@@ -107,6 +117,24 @@ namespace transform_utils {
                 int exact_match_idx = -1;
                 const float EXACT_MATCH_TOLERANCE = 1e-3f; // 1e-3 euclidean distance tolerance
 
+                // CRITICAL FIX: Check if original_space_index exists before accessing
+                printf("DEBUG: Transform - Checking HNSW indices: original=%p, embedding=%p\n",
+                       (void*)model->original_space_index.get(), (void*)model->embedding_space_index.get());
+
+                if (!model->original_space_index) {
+                    // No HNSW index available - cannot perform transform
+                    printf("DEBUG: Transform FAILED - No original_space_index available\n");
+                    return UWOT_ERROR_INVALID_PARAMS;
+                }
+
+                // Additional safety: Check if index is properly initialized
+                size_t element_count = model->original_space_index->getCurrentElementCount();
+                printf("DEBUG: Transform - Original HNSW element count=%zu\n", element_count);
+                if (element_count == 0) {
+                    printf("DEBUG: Transform FAILED - Original HNSW index has 0 elements\n");
+                    return UWOT_ERROR_INVALID_PARAMS;
+                }
+
                 // Save original ef value for restoration
                 size_t original_ef = model->original_space_index->ef_;
 
@@ -150,9 +178,18 @@ namespace transform_utils {
                 // STEP 1: Transform new data point to embedding space
                 if (found_exact_match) {
                     // PERFECT: Return exact fitted coordinates for identical training point
-                    const float* exact_embedding = &model->embedding[static_cast<size_t>(exact_match_idx) * static_cast<size_t>(model->embedding_dim)];
-                    for (int d = 0; d < model->embedding_dim; d++) {
-                        new_embedding[static_cast<size_t>(i) * static_cast<size_t>(model->embedding_dim) + static_cast<size_t>(d)] = exact_embedding[d];
+                    size_t embed_start_idx = static_cast<size_t>(exact_match_idx) * static_cast<size_t>(model->embedding_dim);
+                    size_t new_embed_start_idx = static_cast<size_t>(i) * static_cast<size_t>(model->embedding_dim);
+
+                    // Bounds checking before accessing model embedding
+                    if (embed_start_idx + model->embedding_dim <= model->embedding.size() &&
+                        new_embed_start_idx + model->embedding_dim <= new_embedding.size()) {
+                        const float* exact_embedding = &model->embedding[embed_start_idx];
+                        for (int d = 0; d < model->embedding_dim; d++) {
+                            new_embedding[new_embed_start_idx + static_cast<size_t>(d)] = exact_embedding[d];
+                        }
+                    } else {
+                        return UWOT_ERROR_MEMORY;
                     }
                 } else {
                     // APPROXIMATE: Use HNSW approximation for truly new points
@@ -229,8 +266,12 @@ namespace transform_utils {
                             break;
                         }
                     }
-                    std::cout << "[DEBUG] Transform: Model embedding array has data: " << (embedding_has_data ? "YES" : "NO") << std::endl;
-                    std::cout << "[DEBUG] Transform: Embedding array size: " << model->embedding.size() << std::endl;
+                    #if 0
+std::cout << "[DEBUG] Transform: Model embedding array has data: " << (embedding_has_data ? "YES" : "NO") << std::endl;
+#endif
+                    #if 0
+std::cout << "[DEBUG] Transform: Embedding array size: " << model->embedding.size() << std::endl;
+#endif
                 }
 
                 // Calculate new embedding coordinates as weighted average of neighbor embeddings
@@ -242,7 +283,9 @@ namespace transform_utils {
                         if (embed_idx < model->embedding.size()) {
                             coord += model->embedding[embed_idx] * weights[k];
                         } else {
-                            std::cout << "[DEBUG] Transform: Embedding index out of bounds: " << embed_idx << " >= " << model->embedding.size() << std::endl;
+                            #if 0
+std::cout << "[DEBUG] Transform: Embedding index out of bounds: " << embed_idx << " >= " << model->embedding.size() << std::endl;
+#endif
                         }
                     }
                     new_embedding[static_cast<size_t>(i) * static_cast<size_t>(model->embedding_dim) + static_cast<size_t>(d)] = coord;
@@ -357,8 +400,21 @@ namespace transform_utils {
             if (new_embedding.size() < expected) {
                 return UWOT_ERROR_MEMORY;
             }
+
+            // CRITICAL: Additional bounds checking to prevent buffer overflow
+            // Ensure we don't write past the output embedding buffer
+            if (!embedding) {
+                return UWOT_ERROR_INVALID_PARAMS;
+            }
+
+            // Safe element-wise copy with bounds checking
             for (size_t i = 0; i < expected; ++i) {
-                embedding[i] = new_embedding[i];
+                if (i < new_embedding.size()) {
+                    embedding[i] = new_embedding[i];
+                } else {
+                    // This should never happen with proper bounds checking above
+                    return UWOT_ERROR_MEMORY;
+                }
             }
 
             return UWOT_SUCCESS;

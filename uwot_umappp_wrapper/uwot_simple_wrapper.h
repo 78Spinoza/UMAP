@@ -30,7 +30,7 @@ extern "C" {
 #define UWOT_ERROR_CRC_MISMATCH -7
 
 // Version information
-#define UWOT_WRAPPER_VERSION_STRING "3.33.0"
+#define UWOT_WRAPPER_VERSION_STRING "3.33.1"
 
 // Distance metrics
     typedef enum {
@@ -82,8 +82,8 @@ extern "C" {
     // UNIFIED TRAINING PIPELINE - Single function with int64_t support and v2 callbacks
     UWOT_API int uwot_fit_with_progress_v2(UwotModel* model,
         float* data,
-        int64_t n_obs,        // ✅ LARGE DATASET SUPPORT (supports up to 9E18 points)
-        int64_t n_dim,         // ✅ HIGH-DIMENSIONAL SUPPORT (supports high-dimensional data)
+        int64_t n_obs,        // LARGE DATASET SUPPORT (up to 2B observations)
+        int64_t n_dim,         // Dimension support (max 50D)
         int embedding_dim,
         int n_neighbors,
         float min_dist,

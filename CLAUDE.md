@@ -92,3 +92,4 @@ ctest                              # Run C++ validation tests
 - Zero nullability warnings
 - Zero unused code/structs/functions
 - Professional commit messages without AI attribution
+- when you build with the .bat you start clean and build takes lots of time use CMAKE instead!

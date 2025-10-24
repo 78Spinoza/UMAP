@@ -14,19 +14,11 @@ void send_warning_to_callback(const char* warning_text) {
     if (g_v2_callback) {
         g_v2_callback("Warning", 0, 1, 0.0f, warning_text);
     }
-    else {
-        // Fallback to console if no callback
-        printf("[WARNING] %s\n", warning_text);
-    }
 }
 
 void send_error_to_callback(const char* error_text) {
     if (g_v2_callback) {
         g_v2_callback("Error", 0, 1, 0.0f, error_text);
-    }
-    else {
-        // Fallback to console if no callback
-        printf("[ERROR] %s\n", error_text);
     }
 }
 

@@ -28,8 +28,8 @@ extern "C" {
     UWOT_API int uwot_fit_with_progress_v2(
         UwotModel* model,
         float* data,
-        int64_t n_obs,        // ✅ LARGE DATASET SUPPORT (supports up to 9E18 points)
-        int64_t n_dim,         // ✅ HIGH-DIMENSIONAL SUPPORT (supports high-dimensional data)
+        int64_t n_obs,        // LARGE DATASET SUPPORT (up to 2B observations)
+        int64_t n_dim,         // Dimension support (max 50D)
         int embedding_dim,
         int n_neighbors,
         float min_dist,
@@ -53,10 +53,15 @@ extern "C" {
         int n_obs_int = static_cast<int>(n_obs);
         int n_dim_int = static_cast<int>(n_dim);
 
+        // Apply C# parameters to model
+        model->use_quantization = (use_quantization != 0);
+        model->random_seed = random_seed;
+        model->force_exact_knn = (force_exact_knn != 0);
+
         // Use the new umappp + HNSW implementation for better embeddings
         return fit_utils::uwot_fit_with_umappp_hnsw(model, data, n_obs_int, n_dim_int, embedding_dim, n_neighbors,
             min_dist, spread, n_epochs, metric, embedding, progress_callback,
-            random_seed, M, ef_construction, ef_search);
+            random_seed, M, ef_construction, ef_search, use_quantization);
     }
 
     UWOT_API int uwot_transform(

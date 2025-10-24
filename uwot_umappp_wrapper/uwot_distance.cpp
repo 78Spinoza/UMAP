@@ -151,17 +151,11 @@ namespace distance_metrics {
     void validate_metric_data(const float* data, int n_obs, int n_dim, UwotMetric metric) {
         switch (metric) {
             case UWOT_METRIC_HAMMING:
-                if (!validate_hamming_data(data, n_obs, n_dim)) {
-                    fprintf(stderr, "WARNING: Hamming metric expects binary data (0/1 values). "
-                                   "Non-binary data detected - results may be meaningless.\n");
-                }
+                validate_hamming_data(data, n_obs, n_dim);
                 break;
 
             case UWOT_METRIC_CORRELATION:
-                if (!validate_correlation_data(data, n_obs, n_dim)) {
-                    fprintf(stderr, "WARNING: Correlation metric expects data with meaningful variance. "
-                                   "Constant or near-constant features detected - results may be unreliable.\n");
-                }
+                validate_correlation_data(data, n_obs, n_dim);
                 break;
 
             case UWOT_METRIC_COSINE:

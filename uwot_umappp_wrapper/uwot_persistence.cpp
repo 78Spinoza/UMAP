@@ -111,14 +111,18 @@ namespace persistence_utils {
                 std::string temp_filename;
 
         try {
-            std::cout << "[DEBUG] Inside load_hnsw_from_stream_compressed - about to read headers" << std::endl;
+            #if 0
+std::cout << "[DEBUG] Inside load_hnsw_from_stream_compressed - about to read headers" << std::endl;
+#endif
             // Read LZ4 compression headers with validation (endian-safe)
             uint32_t original_size, compressed_size;
             if (!endian_utils::read_value(input, original_size) ||
                 !endian_utils::read_value(input, compressed_size)) {
                 throw std::runtime_error("Failed to read LZ4 compression headers");
             }
-            std::cout << "[DEBUG] Inside load_hnsw_from_stream_compressed - read original_size=" << original_size << ", compressed_size=" << compressed_size << std::endl;
+            #if 0
+std::cout << "[DEBUG] Inside load_hnsw_from_stream_compressed - read original_size=" << original_size << ", compressed_size=" << compressed_size << std::endl;
+#endif
 
             
             // Enhanced security validation for LZ4 decompression
@@ -246,6 +250,41 @@ namespace persistence_utils {
                 endian_utils::write_value(file, model->normalization_mode);
             }
 
+            // Save exact k-NN flag and raw training data (for brute-force k-NN when force_exact_knn = true)
+            endian_utils::write_value(file, static_cast<uint32_t>(model->force_exact_knn ? 1 : 0));
+            if (model->force_exact_knn && !model->raw_data.empty()) {
+                // Save raw training data size
+                size_t raw_data_size = model->raw_data.size();
+                endian_utils::write_value(file, raw_data_size);
+
+                // Compress raw training data with LZ4
+                size_t uncompressed_bytes = raw_data_size * sizeof(float);
+                int max_compressed_size = LZ4_compressBound(static_cast<int>(uncompressed_bytes));
+                std::vector<char> compressed_raw(max_compressed_size);
+
+                int compressed_size = LZ4_compress_default(
+                    reinterpret_cast<const char*>(model->raw_data.data()),
+                    compressed_raw.data(),
+                    static_cast<int>(uncompressed_bytes),
+                    max_compressed_size
+                );
+
+                if (compressed_size > 0) {
+                    // Write compressed size and data
+                    endian_utils::write_value(file, static_cast<size_t>(compressed_size));
+                    file.write(compressed_raw.data(), compressed_size);
+                } else {
+                    // Compression failed - write uncompressed
+                    size_t zero_size = 0;
+                    endian_utils::write_value(file, zero_size);
+                    file.write(reinterpret_cast<const char*>(model->raw_data.data()), uncompressed_bytes);
+                }
+            } else {
+                // No raw data or force_exact_knn = false
+                size_t zero_size = 0;
+                endian_utils::write_value(file, zero_size);
+            }
+
             // EMBEDDING STORAGE OPTIMIZATION: Skip redundant training embedding array
             // Embeddings are extracted from embedding_space HNSW during transform
             // This saves 50% model file size by eliminating duplicate storage
@@ -348,10 +387,23 @@ namespace persistence_utils {
             bool save_original_index = model->original_space_index != nullptr && !model->use_quantization;
             bool save_embedding_index = model->embedding_space_index != nullptr && !model->always_save_embedding_data;
 
-            std::cout << "[DEBUG] Save flags: save_original_index=" << save_original_index
+            #if 1
+std::cout << "[DEBUG] Save flags: save_original_index=" << save_original_index
                       << ", save_embedding_index=" << save_embedding_index << std::endl;
-            std::cout << "[DEBUG] Index pointers: original=" << (void*)model->original_space_index.get()
+std::cout << "[DEBUG] Index pointers: original=" << (void*)model->original_space_index.get()
                       << ", embedding=" << (void*)model->embedding_space_index.get() << std::endl;
+std::cout << "[DEBUG] Model fitted=" << (model->is_fitted ? "true" : "false")
+                      << ", n_vertices=" << model->n_vertices
+                      << ", embedding_dim=" << model->embedding_dim << std::endl;
+std::cout << "[DEBUG] Quantization enabled=" << (model->use_quantization ? "true" : "false") << std::endl;
+std::cout << "[DEBUG] Always save embedding data=" << (model->always_save_embedding_data ? "true" : "false") << std::endl;
+if (model->original_space_index) {
+    std::cout << "[DEBUG] Original HNSW element count=" << model->original_space_index->getCurrentElementCount() << std::endl;
+}
+if (model->embedding_space_index) {
+    std::cout << "[DEBUG] Embedding HNSW element count=" << model->embedding_space_index->getCurrentElementCount() << std::endl;
+}
+#endif
 
             endian_utils::write_value(file, save_original_index);
             endian_utils::write_value(file, save_embedding_index);
@@ -363,7 +415,9 @@ namespace persistence_utils {
 
                     // Save original space HNSW index data with simple temp file approach
                     // Note: save_hnsw_to_stream_compressed handles its own size field
-                    std::cout << "[DEBUG] Saving original space HNSW index..." << std::endl;
+                    #if 0
+std::cout << "[DEBUG] Saving original space HNSW index..." << std::endl;
+#endif
                     hnsw_utils::save_hnsw_to_stream_compressed(file, model->original_space_index.get());
 
                     std::streampos hnsw_data_end = file.tellp();
@@ -388,14 +442,22 @@ namespace persistence_utils {
 
                     // Save embedding space HNSW index data with simple temp file approach
                     // Note: save_hnsw_to_stream_compressed handles its own size field
-                    std::cout << "[DEBUG] Saving embedding space HNSW index..." << std::endl;
+                    #if 0
+std::cout << "[DEBUG] Saving embedding space HNSW index..." << std::endl;
+#endif
                     try {
-                        std::cout << "[DEBUG] About to call save_hnsw_to_stream_compressed for embedding..." << std::endl;
+                        #if 0
+std::cout << "[DEBUG] About to call save_hnsw_to_stream_compressed for embedding..." << std::endl;
+#endif
                         hnsw_utils::save_hnsw_to_stream_compressed(file, model->embedding_space_index.get());
-                        std::cout << "[DEBUG] save_hnsw_to_stream_compressed for embedding completed successfully" << std::endl;
+                        #if 0
+std::cout << "[DEBUG] save_hnsw_to_stream_compressed for embedding completed successfully" << std::endl;
+#endif
                     }
                     catch (const std::exception& e) {
-                        std::cout << "[DEBUG] Embedding HNSW save exception: " << e.what() << std::endl;
+                        #if 0
+std::cout << "[DEBUG] Embedding HNSW save exception: " << e.what() << std::endl;
+#endif
                         throw;
                     }
 
@@ -403,7 +465,9 @@ namespace persistence_utils {
                 }
                 catch (const std::exception& e) {
                     // Embedding HNSW save failed - this is critical for AI inference
-                    std::cout << "[DEBUG] Embedding space HNSW save exception: " << e.what() << std::endl;
+                    #if 0
+std::cout << "[DEBUG] Embedding space HNSW save exception: " << e.what() << std::endl;
+#endif
                     size_t zero_size = 0;
                     endian_utils::write_value(file, zero_size);
                     send_warning_to_callback("Embedding space HNSW index save failed - AI inference will not work");
@@ -949,6 +1013,18 @@ namespace persistence_utils {
             // - HNSW index created with saved parameters (M, ef_construction, ef_search)
             // - HNSW element count validation (expected vs actual)
             // - k-NN fallback data always saved for exact reproducibility
+            // DEBUG: Print HNSW load status
+            printf("DEBUG: Load completed - Model fitted=%s, n_vertices=%d, embedding_dim=%d\n",
+                   model->is_fitted ? "true" : "false", model->n_vertices, model->embedding_dim);
+            printf("DEBUG: Load HNSW indices - original=%p, embedding=%p\n",
+                   (void*)model->original_space_index.get(), (void*)model->embedding_space_index.get());
+            if (model->original_space_index) {
+                printf("DEBUG: Loaded Original HNSW element count=%zu\n", model->original_space_index->getCurrentElementCount());
+            }
+            if (model->embedding_space_index) {
+                printf("DEBUG: Loaded Embedding HNSW element count=%zu\n", model->embedding_space_index->getCurrentElementCount());
+            }
+
             // Result: Transform consistency guaranteed
 
             return model;

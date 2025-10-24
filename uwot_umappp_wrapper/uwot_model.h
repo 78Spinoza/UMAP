@@ -53,6 +53,9 @@ struct UwotModel {
     // Final embedding
     std::vector<float> embedding;
 
+    // Raw training data (only stored when use_exact_knn = true for brute-force k-NN)
+    std::vector<float> raw_data;
+
     // k-NN structure for transformation (uwot format)
     std::vector<int> nn_indices;      // flattened indices
     std::vector<float> nn_distances;  // flattened distances
@@ -120,7 +123,7 @@ struct UwotModel {
         p99_embedding_distance(0.0f), mild_embedding_outlier_threshold(0.0f),
         extreme_embedding_outlier_threshold(0.0f), median_embedding_distance(0.0f),
         exact_embedding_match_threshold(1e-3f), hnsw_M(32), hnsw_ef_construction(128),
-        hnsw_ef_search(64), use_quantization(true), random_seed(-1), pq_m(4), normalization_mode(1),
+        hnsw_ef_search(64), use_quantization(false), random_seed(-1), pq_m(4), normalization_mode(1),
         // Embedding data preservation
         always_save_embedding_data(false),
         // CRC32 validation

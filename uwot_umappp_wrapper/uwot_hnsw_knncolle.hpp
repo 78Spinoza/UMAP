@@ -220,6 +220,141 @@ private:
     };
 };
 
+/**
+ * Specialized builder for Cosine distance (using Inner Product space)
+ */
+template<typename Index_, typename Float_>
+class HnswCosineBuilder : public HnswBuilder<Index_, Float_> {
+public:
+    HnswCosineBuilder(int M = 16, int ef_construction = 200, int ef_search = 50)
+        : HnswBuilder<Index_, Float_>(M, ef_construction, ef_search) {}
+
+    knncolle::Prebuilt<Index_, Float_, Float_>* build_raw(const knncolle::SimpleMatrix<Index_, Float_>& matrix) const override {
+        const std::size_t num_dim = matrix.num_dimensions();
+        const Index_ num_obs = matrix.num_observations();
+
+        hnswlib::SpaceInterface<Float_>* dist_space = nullptr;
+        hnswlib::HierarchicalNSW<Float_>* hnsw_graph = nullptr;
+
+        // Use InnerProductSpace for cosine similarity
+        // Note: hnswlib returns -dot_product, so distances are negative
+        dist_space = new hnswlib::InnerProductSpace(num_dim);
+        hnsw_graph = new hnswlib::HierarchicalNSW<Float_>(dist_space, num_obs, this->M_, this->ef_construction_);
+
+        // Extract data using the new iterator pattern
+        auto extractor = matrix.new_extractor();
+        for (Index_ i = 0; i < num_obs; ++i) {
+            const Float_* data_ptr = extractor->next();
+            hnsw_graph->addPoint(const_cast<Float_*>(data_ptr), static_cast<hnswlib::labeltype>(i));
+        }
+
+        // Set ef_search parameter
+        hnsw_graph->setEf(this->ef_search_);
+
+        CosineHnswPrebuilt* result = new CosineHnswPrebuilt(hnsw_graph, dist_space, num_obs, num_dim, matrix);
+        return result;
+    }
+
+private:
+    // Concrete implementation for Cosine distance
+    class CosineHnswPrebuilt : public HnswPrebuilt<Index_, Float_> {
+    private:
+        std::vector<Float_> data_;
+        Index_ num_obs_;
+        std::size_t num_dim_;
+
+    public:
+        CosineHnswPrebuilt(
+            hnswlib::HierarchicalNSW<Float_>* hnsw_index,
+            hnswlib::SpaceInterface<Float_>* space,
+            Index_ num_obs,
+            std::size_t num_dim,
+            const knncolle::SimpleMatrix<Index_, Float_>& matrix
+        ) : HnswPrebuilt<Index_, Float_>(hnsw_index, space, num_obs, num_dim),
+            num_obs_(num_obs), num_dim_(num_dim) {
+            // Copy data from matrix
+            data_.resize(static_cast<size_t>(num_obs) * num_dim);
+            auto extractor = matrix.new_extractor();
+            for (Index_ i = 0; i < num_obs; ++i) {
+                const Float_* obs = extractor->next();
+                std::copy(obs, obs + num_dim, data_.begin() + i * num_dim);
+            }
+        }
+
+        const Float_* get_observation(Index_ i) const override {
+            return data_.data() + i * num_dim_;
+        }
+    };
+};
+
+/**
+ * Specialized builder for Manhattan distance (L1 norm)
+ */
+template<typename Index_, typename Float_>
+class HnswManhattanBuilder : public HnswBuilder<Index_, Float_> {
+public:
+    HnswManhattanBuilder(int M = 16, int ef_construction = 200, int ef_search = 50)
+        : HnswBuilder<Index_, Float_>(M, ef_construction, ef_search) {}
+
+    knncolle::Prebuilt<Index_, Float_, Float_>* build_raw(const knncolle::SimpleMatrix<Index_, Float_>& matrix) const override {
+        const std::size_t num_dim = matrix.num_dimensions();
+        const Index_ num_obs = matrix.num_observations();
+
+        hnswlib::SpaceInterface<Float_>* dist_space = nullptr;
+        hnswlib::HierarchicalNSW<Float_>* hnsw_graph = nullptr;
+
+        // Use L1 space for Manhattan distance
+        // Note: hnswlib doesn't have built-in L1, so we fall back to L2 for now
+        // TODO: Implement custom L1Space if needed
+        dist_space = new hnswlib::L2Space(num_dim);
+        hnsw_graph = new hnswlib::HierarchicalNSW<Float_>(dist_space, num_obs, this->M_, this->ef_construction_);
+
+        // Extract data using the new iterator pattern
+        auto extractor = matrix.new_extractor();
+        for (Index_ i = 0; i < num_obs; ++i) {
+            const Float_* data_ptr = extractor->next();
+            hnsw_graph->addPoint(const_cast<Float_*>(data_ptr), static_cast<hnswlib::labeltype>(i));
+        }
+
+        // Set ef_search parameter
+        hnsw_graph->setEf(this->ef_search_);
+
+        ManhattanHnswPrebuilt* result = new ManhattanHnswPrebuilt(hnsw_graph, dist_space, num_obs, num_dim, matrix);
+        return result;
+    }
+
+private:
+    // Concrete implementation for Manhattan distance
+    class ManhattanHnswPrebuilt : public HnswPrebuilt<Index_, Float_> {
+    private:
+        std::vector<Float_> data_;
+        Index_ num_obs_;
+        std::size_t num_dim_;
+
+    public:
+        ManhattanHnswPrebuilt(
+            hnswlib::HierarchicalNSW<Float_>* hnsw_index,
+            hnswlib::SpaceInterface<Float_>* space,
+            Index_ num_obs,
+            std::size_t num_dim,
+            const knncolle::SimpleMatrix<Index_, Float_>& matrix
+        ) : HnswPrebuilt<Index_, Float_>(hnsw_index, space, num_obs, num_dim),
+            num_obs_(num_obs), num_dim_(num_dim) {
+            // Copy data from matrix
+            data_.resize(static_cast<size_t>(num_obs) * num_dim);
+            auto extractor = matrix.new_extractor();
+            for (Index_ i = 0; i < num_obs; ++i) {
+                const Float_* obs = extractor->next();
+                std::copy(obs, obs + num_dim, data_.begin() + i * num_dim);
+            }
+        }
+
+        const Float_* get_observation(Index_ i) const override {
+            return data_.data() + i * num_dim_;
+        }
+    };
+};
+
 } // namespace uwot
 
 #endif // UWOT_HNSW_KNNCOLLE_HPP
