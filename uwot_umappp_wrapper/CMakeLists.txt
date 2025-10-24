@@ -53,12 +53,20 @@ FetchContent_MakeAvailable(subpar)
 FetchContent_MakeAvailable(irlba)
 FetchContent_MakeAvailable(knncolle)
 
+# Find and enable OpenMP for parallel optimization
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    message(STATUS "OpenMP found: ${OpenMP_CXX_VERSION}")
+else()
+    message(WARNING "OpenMP not found - umappp will run in single-threaded mode")
+endif()
+
 # Disable Eigen testing and documentation to avoid C++11 issues
 set(EIGEN_BUILD_TESTING OFF CACHE BOOL "Don't build tests")
 set(EIGEN_BUILD_DOC OFF CACHE BOOL "Don't build documentation")
 
-# Disable parallel optimization for simpler builds
-add_definitions(-DUMAPPP_NO_PARALLEL_OPTIMIZATION)
+# Enable parallel optimization for better performance
+# (umappp will use OpenMP when available)
 
 # Add the wrapper library with existing source files
 add_library(uwot_umappp SHARED
@@ -85,6 +93,11 @@ target_include_directories(uwot_umappp PRIVATE
     ${knncolle_SOURCE_DIR}/include
     ${eigen_SOURCE_DIR}
 )
+
+# Link OpenMP for parallel optimization
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(uwot_umappp PUBLIC OpenMP::OpenMP_CXX)
+endif()
 
 # Windows-specific DLL export settings
 if(WIN32)

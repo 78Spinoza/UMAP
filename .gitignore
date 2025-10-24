@@ -9,6 +9,14 @@ uwot_pure_cpp/build/
 uwot_umappp_wrapper/build/
 uwot_pure_cpp/tmp/
 uwot_umappp_wrapper/tmp/
+
+# Demo output and runtime folders
+UMAPDemo/gif/
+UMAPDemo/gif/mnist_min_dist_experiments/
+UMAPDemo/gif/mnist_mindist_experiments/
+UMAPDemo/gif/mnist_n_neighbors_experiments/
+UMAPuwotSharp/UMAPuwotSharp/runtimes/
+tmp/
 UMAPDemo/bin/
 UMAPDemo/obj/
 UMAPDemo/binReleasenet8.0-windows/
