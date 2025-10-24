@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PlatformTarget>x64</PlatformTarget>
+    <StartupObject>UMAPDemo.Program</StartupObject>
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <!-- Exclude old complex Program.cs -->
+  <ItemGroup>
+    <Compile Remove="Program_Complex.cs" />
+  </ItemGroup>
+
+  
+  <ItemGroup>
+    <PackageReference Include="NumSharp" Version="0.30.0" />
+    <PackageReference Include="OxyPlot.Core" Version="2.1.2" />
+    <PackageReference Include="OxyPlot.WindowsForms" Version="2.1.2" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.8" />
+    <PackageReference Include="Microsoft.Data.Analysis" Version="0.21.1" />
+  </ItemGroup>
+
+  <!-- Reference to UMAPuwotSharp library -->
+  <ItemGroup>
+    <ProjectReference Include="../UMAPuwotSharp/UMAPuwotSharp/UMAPuwotSharp.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Data\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  
+  <!-- Copy UMAP native libraries -->
+  <ItemGroup>
+    <Content Include="../UMAPuwotSharp/UMAPuwotSharp/uwot.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="../UMAPuwotSharp/UMAPuwotSharp/libuwot.so">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

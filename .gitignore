@@ -5,6 +5,14 @@ build/
 build-debug/
 build-windows/
 build-linux/
+uwot_pure_cpp/build/
+uwot_umappp_wrapper/build/
+uwot_pure_cpp/tmp/
+uwot_umappp_wrapper/tmp/
+UMAPDemo/bin/
+UMAPDemo/obj/
+UMAPDemo/binReleasenet8.0-windows/
+UMAPDemo/Results/
 
 # Visual Studio
 .vs/
@@ -37,3 +45,4 @@ build-linux/
 # OS files
 .DS_Store
 Thumbs.db
+nul
