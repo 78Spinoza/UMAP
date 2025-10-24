@@ -15,116 +15,28 @@ if !ERRORLEVEL! NEQ 0 (
 )
 
 REM === BUILD WINDOWS VERSION ===
-echo [1/2] Building REAL UMAPPP Windows version...
+echo [1/2] Building Windows version...
 echo       (libscran/umappp + spectral initialization)
 echo ----------------------------------------
 
-if exist build-windows (
-    rmdir /s /q build-windows
-)
-mkdir build-windows
-cd build-windows
-
-cmake .. -G "Visual Studio 17 2022" -A x64 -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON
-if !ERRORLEVEL! NEQ 0 (
-    echo ERROR: Windows CMake configuration failed!
-    exit /b 1
-)
-
-cmake --build . --config Release
+REM Call the Windows-only build script
+call BuildWindowsOnly.bat
 if !ERRORLEVEL! NEQ 0 (
     echo ERROR: Windows build failed!
     exit /b 1
 )
 
-echo [INFO] Running Windows validation tests...
-cd Release
-
-REM Run all essential tests
-set WIN_ALL_TESTS_PASSED=1
-
-if exist "test_standard_comprehensive.exe" (
-    echo [TEST] Running standard comprehensive validation...
-    test_standard_comprehensive.exe
-    if !ERRORLEVEL! EQU 0 (
-        echo [PASS] Standard comprehensive test PASSED
-    ) else (
-        echo [FAIL] Standard comprehensive test FAILED with code !ERRORLEVEL!
-        set WIN_ALL_TESTS_PASSED=0
-    )
-) else (
-    echo [WARN] test_standard_comprehensive.exe not found
-    set WIN_ALL_TESTS_PASSED=0
-)
-
-if exist "test_error_fixes_simple.exe" (
-    echo [TEST] Running error fixes validation...
-    test_error_fixes_simple.exe
-    if !ERRORLEVEL! EQU 0 (
-        echo [PASS] Error fixes test PASSED
-    ) else (
-        echo [FAIL] Error fixes test FAILED with code !ERRORLEVEL!
-        set WIN_ALL_TESTS_PASSED=0
-    )
-) else (
-    echo [WARN] test_error_fixes_simple.exe not found
-)
-
-if exist "test_comprehensive_pipeline.exe" (
-    echo [TEST] Running comprehensive pipeline validation...
-    test_comprehensive_pipeline.exe
-    if !ERRORLEVEL! EQU 0 (
-        echo [PASS] Comprehensive pipeline test PASSED
-    ) else (
-        echo [FAIL] Comprehensive pipeline test FAILED with code !ERRORLEVEL!
-        set WIN_ALL_TESTS_PASSED=0
-    )
-) else (
-    echo [WARN] test_comprehensive_pipeline.exe not found
-)
-
-if exist "test_enhanced_wrapper.exe" (
-    echo [TEST] Running enhanced wrapper validation...
-    test_enhanced_wrapper.exe
-    if !ERRORLEVEL! EQU 0 (
-        echo [PASS] Enhanced wrapper test PASSED
-    ) else (
-        echo [FAIL] Enhanced wrapper test FAILED with code !ERRORLEVEL!
-        set WIN_ALL_TESTS_PASSED=0
-    )
-) else (
-    echo [WARN] test_enhanced_wrapper.exe not found
-    set WIN_ALL_TESTS_PASSED=0
-)
-
-cd ..
-if !WIN_ALL_TESTS_PASSED! EQU 1 (
-    echo [PASS] ALL Windows tests completed successfully
-) else (
-    echo [FAIL] Some Windows tests failed - build may have issues!
-)
-
-echo [PASS] Windows build completed
-cd ..
-
 REM === BUILD LINUX VERSION WITH DOCKER ===
 echo.
-echo [2/2] Building Enhanced Linux version with Docker...
+echo [2/2] Building Linux version with Docker...
 echo ----------------------------------------
 
-if exist build-linux (
-    rmdir /s /q build-linux
-)
-
-REM Run Docker build - simplified to avoid quote parsing issues
-docker run --rm -v "%cd%":/src -w /src ubuntu:22.04 bash -c "apt-get update && apt-get install -y build-essential cmake libstdc++-11-dev && mkdir -p build-linux && cd build-linux && cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON -DCMAKE_POSITION_INDEPENDENT_CODE=ON && make -j4 && echo Build completed && ls -la && if [ -f libuwot.so ]; then cp libuwot.so libuwot_backup.so && echo Library backup created; fi && echo Linux build finished successfully"
-
+REM Call the Linux-only build script
+call BuildLinux.bat
 if !ERRORLEVEL! NEQ 0 (
-    echo ERROR: Docker Linux build failed!
+    echo ERROR: Linux build failed!
     exit /b 1
 )
-
-echo [PASS] Linux build completed
 
 REM === SETUP CSHARP PROJECT STRUCTURE ===
 echo.
@@ -142,15 +54,15 @@ if not exist "..\UMAPuwotSharp\UMAPuwotSharp" (
 )
 
 REM Copy Windows DLL directly to project base folder
-if exist "build-windows\Release\uwot.dll" (
-    copy "build-windows\Release\uwot.dll" "..\UMAPuwotSharp\UMAPuwotSharp\uwot.dll"
+if exist "build\Release\uwot.dll" (
+    copy "build\Release\uwot.dll" "..\UMAPuwotSharp\UMAPuwotSharp\uwot.dll"
     if !ERRORLEVEL! EQU 0 (
         echo [PASS] Copied Windows uwot.dll to C# project base folder
     ) else (
         echo [FAIL] Failed to copy Windows uwot.dll - Error: !ERRORLEVEL!
     )
 ) else (
-    echo [FAIL] Windows uwot.dll not found in build-windows\Release\
+    echo [FAIL] Windows uwot.dll not found in build\Release\
 )
 
 REM Copy Linux .so file directly to project base folder
@@ -228,25 +140,25 @@ echo ===========================================
 echo   Enhanced UMAP Build Summary
 echo ===========================================
 echo.
-echo Windows libraries (build-windows\Release\):
-if exist "build-windows\Release\uwot.dll" (
+echo Windows libraries (build\Release\):
+if exist "build\Release\uwot.dll" (
     echo   [PASS] uwot.dll (Enhanced UMAP with multiple metrics)
-    for %%A in ("build-windows\Release\uwot.dll") do echo         Size: %%~zA bytes
+    for %%A in ("build\Release\uwot.dll") do echo         Size: %%~zA bytes
 ) else (echo   [FAIL] uwot.dll)
 
-if exist "build-windows\Release\test_standard_comprehensive.exe" (
+if exist "build\Release\test_standard_comprehensive.exe" (
     echo   [PASS] test_standard_comprehensive.exe
 ) else (
     echo   [FAIL] test_standard_comprehensive.exe
 )
 
-if exist "build-windows\Release\test_error_fixes_simple.exe" (
+if exist "build\Release\test_error_fixes_simple.exe" (
     echo   [PASS] test_error_fixes_simple.exe
 ) else (
     echo   [FAIL] test_error_fixes_simple.exe
 )
 
-if exist "build-windows\Release\test_comprehensive_pipeline.exe" (
+if exist "build\Release\test_comprehensive_pipeline.exe" (
     echo   [PASS] test_comprehensive_pipeline.exe
 ) else (
     echo   [FAIL] test_comprehensive_pipeline.exe
@@ -255,7 +167,8 @@ if exist "build-windows\Release\test_comprehensive_pipeline.exe" (
 echo.
 echo Linux libraries (build-linux\):
 if exist "build-linux" (
-    dir build-linux\libuwot.so* build-linux\*.so /B 2>nul | findstr /R ".*"    if !ERRORLEVEL! EQU 0 (
+    dir build-linux\libuwot.so* build-linux\*.so /B 2>nul | findstr /R ".*"
+    if !ERRORLEVEL! EQU 0 (
         echo   [PASS] Linux .so files found:
         for %%F in (build-linux\libuwot.so* build-linux\*.so) do (
             if exist "%%F" (

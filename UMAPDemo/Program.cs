@@ -289,7 +289,7 @@ namespace UMAPDemo
                 progressCallback: UnifiedProgressCallback,
                 embeddingDimension: 2,
                 nNeighbors: 25,  // Test with 25 instead of 50 - less smoothing
-                minDist: 0.1f,
+                minDist: 0.35f,
                 spread: 1.0f,
                 nEpochs: 500,
                 metric: DistanceMetric.Euclidean,
@@ -348,9 +348,9 @@ namespace UMAPDemo
 
             Console.WriteLine($"   Loaded: {data.GetLength(0)} points, {data.GetLength(1)} dimensions");
 
-            // 70k hairy mammoth dataset (faster testing)
+            // 100k hairy mammoth dataset
             int availableSamples = data.GetLength(0);
-            int requestedSamples = 70000;  // 70k dataset for faster testing
+            int requestedSamples = 100000;  // 100k dataset for comprehensive testing
 
             if (availableSamples < requestedSamples)
             {
@@ -387,8 +387,8 @@ namespace UMAPDemo
                 data: floatData2,
                 progressCallback: UnifiedProgressCallback,
                 embeddingDimension: 2,
-                nNeighbors: 80,        // CRITICAL: Higher for 70K+ points - Python UMAP standard
-                minDist: 0.1f,         // Standard UMAP value
+                nNeighbors: 80,        // Higher for 100k dataset as requested
+                minDist: 0.35f,        // Updated to 0.35 as requested
                 spread: 1.0f,
                 nEpochs: 500,
                 metric: DistanceMetric.Euclidean,
@@ -737,7 +737,7 @@ HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.
                     progressCallback: CreatePrefixedCallback($"n={nNeighbors}"),
                     embeddingDimension: 2,
                     nNeighbors: nNeighbors,
-                    minDist: 0.15f,
+                    minDist: 0.35f,
                     spread: 1.0f,
                     nEpochs: 300,
                     metric: DistanceMetric.Euclidean,

@@ -148,7 +148,7 @@ namespace UMAPDemo
                 Console.WriteLine();
 
                 // Create 2D embedding using helper function and save model + timing
-                var (umap, fitTime) = CreateMnistEmbeddingWithModel(doubleData, labels, nNeighbors: 30, minDist: 0.1f, spread: 1.0f,
+                var (umap, fitTime) = CreateMnistEmbeddingWithModel(doubleData, labels, nNeighbors: 40, minDist: 0.05f, spread: 1.0f,
                     name: "mnist_2d_embedding", folderName: "", directKNN: false);
 
                 Console.WriteLine();
@@ -834,7 +834,7 @@ min_dist={modelInfo.MinimumDistance:F2} | spread={modelInfo.Spread:F2} | epochs=
         public static void RunMnistMinDistExperiments()
         {
             Console.WriteLine("🔢 Running MNIST min_dist Experiments (n_neighbors=40)...");
-            Console.WriteLine("   Testing min_dist from 0.05 to 2.0 (increments of 0.05) with n_neighbors=40");
+            Console.WriteLine("   Testing min_dist from 0.05 to 0.3 (increments of 0.2) with n_neighbors=40");
 
             // Path to the binary MNIST file
             string dataPath = Path.Combine("Data", "mnist_binary.dat.zip");
@@ -883,7 +883,7 @@ min_dist={modelInfo.MinimumDistance:F2} | spread={modelInfo.Spread:F2} | epochs=
 
             // Test min_dist values from 0.05 to 2.0 in increments of 0.05 (40 tests total)
             var minDistTests = new List<float>();
-            for (float dist = 0.05f; dist <= 2.0f; dist += 0.05f)
+            for (float dist = 0.05f; dist <= 0.3f; dist += 0.2f)
             {
                 minDistTests.Add(dist);
             }
