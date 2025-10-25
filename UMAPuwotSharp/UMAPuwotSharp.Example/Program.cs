@@ -27,14 +27,14 @@ namespace UMAPExample
 
             try
             {
-                // Demo 1: 27D Embedding with Progress Reporting
+                // Demo 1: Model Persistence and Transform (HNSW save/load test)
+                DemoModelPersistence();
+
+                // Demo 2: 27D Embedding with Progress Reporting
                 Demo27DEmbeddingWithProgress();
 
-                // Demo 2: Multi-Dimensional Embeddings (1D to 50D)
+                // Demo 3: Multi-Dimensional Embeddings (1D to 50D)
                 DemoMultiDimensionalEmbeddings();
-
-                // Demo 3: Model Persistence and Transform
-                DemoModelPersistence();
 
                 // Demo 4: Different Data Types and Metrics with Progress
                 DemoDistanceMetricsWithProgress();

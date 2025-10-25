@@ -24,21 +24,24 @@ namespace transform_utils {
         float* percentile_rank,
         float* z_score
     ) {
-        if (!model || !model->is_fitted || !new_data || !embedding ||
-            n_new_obs <= 0 || n_dim != model->n_dim) {
+        if (!model) {
             return UWOT_ERROR_INVALID_PARAMS;
         }
-
-        // Additional validation: Ensure model has proper dimensions
-        if (model->embedding_dim <= 0 || model->n_vertices <= 0) {
+        if (!model->is_fitted) {
+                        return UWOT_ERROR_INVALID_PARAMS;
+        }
+        if (!new_data) {
+                        return UWOT_ERROR_INVALID_PARAMS;
+        }
+        if (!embedding) {
             return UWOT_ERROR_INVALID_PARAMS;
         }
-
-        // Additional validation: Ensure embedding array exists and has correct size
-        if (model->embedding.empty()) {
+        if (n_new_obs <= 0) {
             return UWOT_ERROR_INVALID_PARAMS;
         }
-
+        if (n_dim != model->n_dim) {
+            return UWOT_ERROR_INVALID_PARAMS;
+        }
         // Transform operation starting
 
         try {
@@ -52,8 +55,6 @@ namespace transform_utils {
                     size_t idx = static_cast<size_t>(i) * static_cast<size_t>(n_dim) + static_cast<size_t>(j);
                     raw_point[j] = new_data[idx];
                 }
-
-                // Raw point data collected
 
                 // Use stored normalization mode from training
                 hnsw_utils::NormalizationPipeline::normalize_data_consistent(
@@ -118,20 +119,14 @@ namespace transform_utils {
                 const float EXACT_MATCH_TOLERANCE = 1e-3f; // 1e-3 euclidean distance tolerance
 
                 // CRITICAL FIX: Check if original_space_index exists before accessing
-                printf("DEBUG: Transform - Checking HNSW indices: original=%p, embedding=%p\n",
-                       (void*)model->original_space_index.get(), (void*)model->embedding_space_index.get());
-
                 if (!model->original_space_index) {
                     // No HNSW index available - cannot perform transform
-                    printf("DEBUG: Transform FAILED - No original_space_index available\n");
                     return UWOT_ERROR_INVALID_PARAMS;
                 }
 
                 // Additional safety: Check if index is properly initialized
                 size_t element_count = model->original_space_index->getCurrentElementCount();
-                printf("DEBUG: Transform - Original HNSW element count=%zu\n", element_count);
                 if (element_count == 0) {
-                    printf("DEBUG: Transform FAILED - Original HNSW index has 0 elements\n");
                     return UWOT_ERROR_INVALID_PARAMS;
                 }
 

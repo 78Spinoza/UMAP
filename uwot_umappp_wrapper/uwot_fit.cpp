@@ -11,6 +11,8 @@
 #include <ctime>
 #include <chrono>
 #include <thread>
+#include <random>
+#include <omp.h>
 
 
 
@@ -28,8 +30,37 @@
 
 namespace fit_utils {
 
+// CRITICAL MISSING FUNCTION: Compute normalization statistics (from pure_cpp)
+void compute_normalization(const std::vector<float>& data, int n_obs, int n_dim,
+    std::vector<float>& means, std::vector<float>& stds) {
 
+    means.resize(n_dim);
+    stds.resize(n_dim);
 
+    // Calculate means
+    std::fill(means.begin(), means.end(), 0.0f);
+    for (int i = 0; i < n_obs; i++) {
+        for (int j = 0; j < n_dim; j++) {
+            means[j] += data[static_cast<size_t>(i) * static_cast<size_t>(n_dim) + static_cast<size_t>(j)];
+        }
+    }
+    for (int j = 0; j < n_dim; j++) {
+        means[j] /= static_cast<float>(n_obs);
+    }
+
+    // Calculate standard deviations
+    std::fill(stds.begin(), stds.end(), 0.0f);
+    for (int i = 0; i < n_obs; i++) {
+        for (int j = 0; j < n_dim; j++) {
+            float diff = data[static_cast<size_t>(i) * static_cast<size_t>(n_dim) + static_cast<size_t>(j)] - means[j];
+            stds[j] += diff * diff;
+        }
+    }
+    for (int j = 0; j < n_dim; j++) {
+        stds[j] = std::sqrt(stds[j] / static_cast<float>(n_obs - 1));
+        if (stds[j] < 1e-8f) stds[j] = 1.0f; // Prevent division by zero
+    }
+}
 
 
 
@@ -380,11 +411,42 @@ namespace fit_utils {
                 }
             }
 
+            // CRITICAL FIX: Initialize model->embedding early (like pure_cpp version)
+            // This prevents memory corruption by working directly with model->embedding
+            // instead of using a local embedding array and copying at the end
+            model->embedding.resize(static_cast<size_t>(n_obs) * static_cast<size_t>(embedding_dim));
+
+            // Thread-safe random initialization (matching pure_cpp approach)
+            if (wrapped_callback) {
+                wrapped_callback("Initializing embedding", 12, 100, 12.0f, "Setting up random embedding coordinates");
+            }
+
+#pragma omp parallel if(n_obs > 1000)
+            {
+                // Each thread gets its own generator to avoid race conditions
+                thread_local std::mt19937 gen(options.initialize_seed);
+                thread_local std::normal_distribution<float> dist(0.0f, 1e-4f);
+
+#pragma omp for
+                for (int i = 0; i < n_obs; i++) {
+                    for (int d = 0; d < embedding_dim; d++) {
+                        size_t idx = static_cast<size_t>(i) * static_cast<size_t>(embedding_dim) + static_cast<size_t>(d);
+                        model->embedding[idx] = dist(gen);
+                    }
+                }
+            }
+
             // CRITICAL FIX 2.1: Normalize data before HNSW building (must match transform normalization)
             // Determine normalization mode based on metric
             int norm_mode = hnsw_utils::NormalizationPipeline::determine_normalization_mode(metric);
             model->normalization_mode = norm_mode;
             model->use_normalization = (norm_mode > 0);
+
+            // CRITICAL MISSING STEP: Compute normalization statistics FIRST (like pure_cpp)
+            if (norm_mode > 0) {
+                std::vector<float> input_data(data, data + static_cast<size_t>(n_obs) * n_dim);
+                compute_normalization(input_data, n_obs, n_dim, model->feature_means, model->feature_stds);
+            }
 
             // Prepare data for HNSW (normalized or raw depending on metric)
             std::vector<float> processed_data;
@@ -408,8 +470,9 @@ namespace fit_utils {
                     norm_mode
                 );
 
-                if (norm_success) {
+                                if (norm_success) {
                     data_for_hnsw = processed_data.data();
+
                     if (wrapped_callback) {
                         wrapped_callback("Normalization complete", 18, 100, 18.0f, "Data normalized for HNSW");
                     }
@@ -552,8 +615,9 @@ namespace fit_utils {
                 wrapped_callback("Initializing umappp", 50, 100, 0.0f, "Setting up umappp optimization with HNSW neighbors");
             }
 
-            // Initialize umappp with HNSW prebuilt index
-            auto status = umappp::initialize<int, float, float>(*hnsw_prebuilt, embedding_dim, embedding, std::move(options));
+            // Initialize umappp with HNSW prebuilt index using model->embedding directly
+            // This prevents memory corruption by avoiding local embedding array
+            auto status = umappp::initialize<int, float, float>(*hnsw_prebuilt, embedding_dim, model->embedding.data(), std::move(options));
 
             if (wrapped_callback) {
                 wrapped_callback("Optimizing layout", 60, 100, 0.0f, "Running umappp optimization with HNSW neighbors");
@@ -632,122 +696,6 @@ namespace fit_utils {
                 // Continue anyway - fit succeeded even if index save failed
             }
 
-            // CRITICAL FIX 1.2: Create embedding space HNSW index for AI metrics
-            if (wrapped_callback) {
-                wrapped_callback("Building embedding index", 97, 100, 97.0f, "Creating embedding space HNSW for AI metrics");
-            }
-
-            try {
-                // Create L2 space for embeddings (always L2, regardless of original metric)
-                auto embedding_space_factory = std::make_unique<hnsw_utils::SpaceFactory>();
-                hnswlib::SpaceInterface<float>* embedding_space = new hnswlib::L2Space(embedding_dim);
-
-                // Create HNSW index for embedding space
-                auto embedding_hnsw = std::make_unique<hnswlib::HierarchicalNSW<float>>(
-                    embedding_space, n_obs, actual_M, actual_ef_construction
-                );
-
-                // Add all embedding points to the index with progress reporting
-                for (int i = 0; i < n_obs; i++) {
-                    embedding_hnsw->addPoint(embedding + i * embedding_dim, static_cast<hnswlib::labeltype>(i));
-
-                    // Report progress every 5% of points
-                    if (wrapped_callback && (i % (n_obs / 20) == 0 || i == n_obs - 1)) {
-                        float sub_progress = 97.0f + (1.0f * i / n_obs);
-                        wrapped_callback("Building embedding index", i, n_obs, sub_progress, "Indexing embeddings for AI");
-                    }
-                }
-
-                // Set ef for search
-                embedding_hnsw->setEf(actual_ef_search);
-
-                // Save to model
-                model->embedding_space_index = std::move(embedding_hnsw);
-                model->embedding_space_factory = std::move(embedding_space_factory);
-
-            } catch (const std::exception& e) {
-                if (wrapped_callback) {
-                    wrapped_callback("Warning", 97, 100, 97.0f, "Failed to create embedding index - AI metrics may not work");
-                }
-                // Continue anyway - fit succeeded even if embedding index creation failed
-            }
-            } // End of else block (HNSW path)
-
-            // CRITICAL FIX 1.3: Compute embedding statistics for AI metrics
-            if (wrapped_callback) {
-                wrapped_callback("Computing statistics", 98, 100, 98.0f, "Computing embedding space statistics");
-            }
-
-            try {
-                if (model->embedding_space_index) {
-                    // Query each point to get k-nearest neighbor distances in embedding space
-                    std::vector<float> embedding_distances;
-                    embedding_distances.reserve(static_cast<size_t>(n_obs) * n_neighbors);
-
-                    for (int i = 0; i < n_obs; i++) {
-                        auto result = model->embedding_space_index->searchKnn(
-                            embedding + i * embedding_dim,
-                            static_cast<size_t>(n_neighbors) + 1  // +1 to include self
-                        );
-
-                        // Skip self (distance ~0), collect rest
-                        while (!result.empty()) {
-                            float dist = result.top().first;
-                            result.pop();
-                            if (dist > 1e-6f) {  // Skip self (very small distance)
-                                embedding_distances.push_back(dist);
-                            }
-                        }
-
-                        // Report progress every 5%
-                        if (wrapped_callback && (i % (n_obs / 20) == 0 || i == n_obs - 1)) {
-                            float sub_progress = 98.0f + (0.5f * i / n_obs);
-                            wrapped_callback("Computing statistics", i, n_obs, sub_progress, "Analyzing embedding distances");
-                        }
-                    }
-
-                    // Compute statistics if we have data
-                    if (!embedding_distances.empty()) {
-                        std::sort(embedding_distances.begin(), embedding_distances.end());
-
-                        model->min_embedding_distance = embedding_distances.front();
-                        model->max_embedding_distance = embedding_distances.back();
-
-                        // Compute mean
-                        float sum = std::accumulate(embedding_distances.begin(), embedding_distances.end(), 0.0f);
-                        model->mean_embedding_distance = sum / embedding_distances.size();
-
-                        // Compute std dev
-                        float sum_sq = 0.0f;
-                        for (float d : embedding_distances) {
-                            float diff = d - model->mean_embedding_distance;
-                            sum_sq += diff * diff;
-                        }
-                        model->std_embedding_distance = std::sqrt(sum_sq / embedding_distances.size());
-
-                        // Compute percentiles
-                        size_t p95_idx = static_cast<size_t>(0.95 * embedding_distances.size());
-                        size_t p99_idx = static_cast<size_t>(0.99 * embedding_distances.size());
-                        model->p95_embedding_distance = embedding_distances[p95_idx];
-                        model->p99_embedding_distance = embedding_distances[p99_idx];
-                        model->median_embedding_distance = embedding_distances[embedding_distances.size() / 2];
-
-                        // Set outlier thresholds
-                        model->mild_embedding_outlier_threshold = model->mean_embedding_distance + 2.5f * model->std_embedding_distance;
-                        model->extreme_embedding_outlier_threshold = model->mean_embedding_distance + 4.0f * model->std_embedding_distance;
-
-                        // Set exact match threshold for embeddings
-                        model->exact_embedding_match_threshold = 1e-3f / std::sqrt(static_cast<float>(embedding_dim));
-                    }
-                }
-            } catch (const std::exception& e) {
-                if (wrapped_callback) {
-                    wrapped_callback("Warning", 98, 100, 98.0f, "Failed to compute embedding statistics - AI metrics may be inaccurate");
-                }
-                // Continue anyway - fit succeeded even if statistics computation failed
-            }
-
-            if (wrapped_callback) {
                 wrapped_callback("Finalizing", 100, 100, 100.0f, "umappp with HNSW completed successfully");
             }
 
@@ -764,6 +712,9 @@ namespace fit_utils {
             model->hnsw_ef_construction = actual_ef_construction;
             model->hnsw_ef_search = actual_ef_search;
             model->use_quantization = (useQuantization != 0);
+
+            // EMBEDDINGS ALREADY POPULATED: No copy needed since we worked directly with model->embedding
+            // This prevents memory corruption that was caused by copying from local embedding array
 
             return UWOT_SUCCESS;
 

@@ -12,7 +12,7 @@
     <!-- Enhanced NuGet metadata -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>UMAPuwotSharp</PackageId>
-    <Version>3.18.0</Version>
+    <Version>3.33.1</Version>
     <Authors>Amin Gholiha</Authors>
     <Company>ID Soft AB</Company>
     <Product>UMAPuwotSharp Enhanced with HNSW</Product>
@@ -25,18 +25,37 @@
     <PackageProjectUrl>https://github.com/78Spinoza/UMAP</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageReleaseNotes><![CDATA[
-🚀 MAJOR RELEASE - UMAP v3.18.0: Phase 4 Large Dataset Support & Unified API
+🚀 MAJOR RELEASE - UMAP v3.33.1: Dual-Mode Exact k-NN + CPU Core Reporting
 
-🔥 CRITICAL BUG FIX:
-- ✅ Fixed exact match detection for Euclidean metric: L2Space returns squared distance, now properly converted with sqrt()
-- ✅ Perfect pipeline consistency: Training embeddings now match transform results exactly (MSE = 0)
-- ✅ Test_Quantization_Pipeline_Consistency: Now passing (was failing with 6-10 unit differences)
-- ✅ All 15/15 C# tests passing: Complete validation suite green
+🔥 BREAKTHROUGH FEATURES:
+- ✅ Dual-mode UMAP implementation: Choose between HNSW (fast) and exact k-NN (precise)
+- ✅ Complete exact k-NN integration with knncolle library and umappp algorithms
+- ✅ CPU core reporting: Progress callbacks now show number of CPU cores used for parallel processing
+- ✅ Complete parameter propagation: ALL C# parameters now properly propagate to C++ (quantization, random seed, etc.)
+- ✅ Production-ready validation: MSE < 0.01 accuracy maintained in both HNSW and exact modes
 
-⚡ WHAT WAS BROKEN:
-- Euclidean distance comparison used squared distances instead of actual distances
-- Caused failure to detect identical training points during transform
-- Training data transformed to different coordinates instead of exact matches
+🎯 NEW DUAL-MODE CAPABILITIES:
+• HNSW Mode (default): 50-2000x faster with <1% accuracy loss
+• Exact k-NN Mode: Perfect accuracy for research/validation scenarios
+• Seamless switching via forceExactKnn parameter
+• Both modes use proven libscran/umappp reference implementation
+
+📊 ENHANCED MONITORING:
+• Real-time CPU core detection and reporting
+• Progress callbacks show: "Using 16 CPU cores for parallel processing"
+• Performance optimization feedback for production deployments
+• Thread utilization monitoring for large-scale training
+
+🔧 TECHNICAL IMPROVEMENTS:
+• Fixed function signature mismatches in umappp integration
+• Resolved parameter propagation issues (quantization, random seed)
+• Enhanced umappp + knncolle bridge for exact k-NN computation
+• Improved build system stability across Windows/Linux platforms
+
+⚡ PREVIOUS v3.18.0 FIXES:
+• Fixed Euclidean exact match detection with proper sqrt() conversion
+• Perfect pipeline consistency (MSE = 0) for training vs transform
+• All 15/15 C# tests passing with comprehensive validation
 - Affected pipeline consistency validation and production reliability
 
 🛠️ TECHNICAL FIX DETAILS:

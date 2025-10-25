@@ -219,9 +219,7 @@ namespace hnsw_utils {
 
     // STREAM-ONLY APPROACH WITH SIZE HEADERS AND CRC32 - Enhanced HNSW stream serialization
     void save_hnsw_to_stream_compressed(std::ostream& output, hnswlib::HierarchicalNSW<float>* hnsw_index) {
-        #if 0
-std::cout << "[STREAM] HNSW Save: Starting stream-only approach with size headers and CRC32..." << std::endl;
-#endif
+        std::cout << "[STREAM] HNSW Save: Starting stream-only approach with size headers and CRC32..." << std::endl;
 
         if (!hnsw_index) {
             throw std::runtime_error("HNSW index is null");
@@ -240,10 +238,8 @@ std::cout << "[STREAM] HNSW Save: Starting stream-only approach with size header
             uint32_t data_crc32 = crc_utils::compute_crc32(hnsw_data.data(), actual_size);
 
             // Write headers to output stream using endian-safe functions
-            #if 0
-std::cout << "[STREAM] HNSW Save: Writing headers - size: " << actual_size
+            std::cout << "[STREAM] HNSW Save: Writing headers - size: " << actual_size
                       << ", CRC32: " << std::hex << data_crc32 << std::dec << std::endl;
-#endif
             endian_utils::write_value(output, actual_size);
             endian_utils::write_value(output, actual_size);
             endian_utils::write_value(output, data_crc32);
@@ -253,9 +249,7 @@ std::cout << "[STREAM] HNSW Save: Writing headers - size: " << actual_size
                 throw std::runtime_error("Failed to write HNSW headers to stream");
             }
 
-            #if 0
-std::cout << "[STREAM] HNSW Save: Headers written successfully" << std::endl;
-#endif
+            std::cout << "[STREAM] HNSW Save: Headers written successfully" << std::endl;
 
             // Write HNSW data to output stream
             output.write(hnsw_data.data(), actual_size);
@@ -268,16 +262,12 @@ std::cout << "[STREAM] HNSW Save: Headers written successfully" << std::endl;
             // Flush the stream to ensure data is written
             output.flush();
 
-            #if 0
-std::cout << "[STREAM] HNSW Save: Stream saveIndex() with " << actual_size
+            std::cout << "[STREAM] HNSW Save: Stream saveIndex() with " << actual_size
                       << " bytes, CRC32: " << std::hex << data_crc32 << std::dec
                       << " completed successfully" << std::endl;
-#endif
 
         } catch (const std::exception& e) {
-            #if 0
-std::cout << "[STREAM] HNSW Save: Exception: " << e.what() << std::endl;
-#endif
+            std::cout << "[STREAM] HNSW Save: Exception: " << e.what() << std::endl;
             throw;
         }
     }
@@ -285,9 +275,7 @@ std::cout << "[STREAM] HNSW Save: Exception: " << e.what() << std::endl;
     void load_hnsw_from_stream_compressed(std::istream& input, hnswlib::HierarchicalNSW<float>* hnsw_index,
         hnswlib::SpaceInterface<float>* space) {
         try {
-            #if 0
-std::cout << "[STREAM] HNSW Load: Starting stream-only approach with CRC32 validation..." << std::endl;
-#endif
+            std::cout << "[STREAM] HNSW Load: Starting stream-only approach with CRC32 validation..." << std::endl;
 
             // Check stream state first
             if (!input.good()) {
@@ -296,9 +284,7 @@ std::cout << "[STREAM] HNSW Load: Starting stream-only approach with CRC32 valid
 
             // Check current stream position
             std::streampos current_pos = input.tellg();
-            #if 0
-std::cout << "[STREAM] HNSW Load: Current stream position: " << current_pos << std::endl;
-#endif
+            std::cout << "[STREAM] HNSW Load: Current stream position: " << current_pos << std::endl;
 
             // Read headers using endian-safe functions for compatibility with existing format
             uint32_t original_size, compressed_size, expected_crc32;
@@ -308,17 +294,13 @@ std::cout << "[STREAM] HNSW Load: Current stream position: " << current_pos << s
                 throw std::runtime_error("Failed to read HNSW headers - stream error or EOF");
             }
 
-            #if 0
-std::cout << "[STREAM] HNSW Load: Read headers - original: " << original_size
+            std::cout << "[STREAM] HNSW Load: Read headers - original: " << original_size
                       << ", compressed: " << compressed_size
                       << ", CRC32: " << std::hex << expected_crc32 << std::dec << std::endl;
-#endif
 
             // Validate sizes - allow zero if this is a marker for no data
             if (original_size == 0 && compressed_size == 0) {
-                #if 0
-std::cout << "[STREAM] HNSW Load: Zero size headers detected - this might indicate empty HNSW data" << std::endl;
-#endif
+                std::cout << "[STREAM] HNSW Load: Zero size headers detected - this might indicate empty HNSW data" << std::endl;
                 throw std::runtime_error("Invalid HNSW size headers - both sizes are zero");
             }
 
@@ -333,10 +315,8 @@ std::cout << "[STREAM] HNSW Load: Zero size headers detected - this might indica
             // Compute and validate CRC32 before loading
             uint32_t computed_crc32 = crc_utils::compute_crc32(data_buffer.data(), original_size);
 
-            #if 0
-std::cout << "[STREAM] HNSW Load: Computed CRC32: " << std::hex << computed_crc32
+            std::cout << "[STREAM] HNSW Load: Computed CRC32: " << std::hex << computed_crc32
                       << ", Expected: " << expected_crc32 << std::dec << std::endl;
-#endif
 
             if (computed_crc32 != expected_crc32) {
                 throw std::runtime_error("HNSW data CRC32 validation failed - index corruption detected!");
@@ -349,14 +329,10 @@ std::cout << "[STREAM] HNSW Load: Computed CRC32: " << std::hex << computed_crc3
             // Load HNSW from validated data stream
             hnsw_index->loadIndex(data_stream, space);
 
-            #if 0
-std::cout << "[STREAM] HNSW Load: ✅ CRC32 validation passed - Stream loadIndex() completed successfully" << std::endl;
-#endif
+            std::cout << "[STREAM] HNSW Load: ✅ CRC32 validation passed - Stream loadIndex() completed successfully" << std::endl;
 
         } catch (const std::exception& e) {
-            #if 0
-std::cout << "[STREAM] HNSW Load: Exception: " << e.what() << std::endl;
-#endif
+            std::cout << "[STREAM] HNSW Load: Exception: " << e.what() << std::endl;
             throw;
         }
     }

@@ -75,6 +75,10 @@ struct UwotModel {
     float exact_match_threshold;               // Legacy exact match threshold
     float hnsw_recall_percentage;              // HNSW accuracy vs exact k-NN (0-100%)
 
+    // CRITICAL MISSING FIELDS: Normalization and embedding statistics (from old working code)
+    float original_mean = 0.0f;                 // Normalization mean
+    float original_scale = 1.0f;                // Normalization scale (must be > 0)
+
     // Embedding space statistics (for AI inference)
     float min_embedding_distance;
     float max_embedding_distance;
