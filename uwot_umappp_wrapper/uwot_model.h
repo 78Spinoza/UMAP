@@ -52,6 +52,9 @@ struct UwotModel {
     // Final embedding
     std::vector<float> embedding;
 
+    // SPECTRAL INITIALIZATION: Initial embedding from spectral layout (for transform consistency)
+    std::vector<float> initial_embedding;
+
     // Raw training data (only stored when use_exact_knn = true for brute-force k-NN)
     std::vector<float> raw_data;
 
@@ -112,6 +115,13 @@ struct UwotModel {
     uint32_t embedding_space_crc;      // CRC32 of embedding space HNSW index
     uint32_t model_version_crc;        // CRC32 of model structure version
 
+    // FAST TRANSFORM OPTIMIZATION (error4c.txt)
+    enum class KnnBackend { HNSW, EXACT };
+    KnnBackend knn_backend = KnnBackend::HNSW;  // Which k-NN backend was used during fit
+    std::vector<float> rho;                     // Nearest neighbor distance for each point
+    std::vector<float> sigma;                   // Bandwidth parameter for each point
+    bool has_fast_transform_data = false;       // True if rho/sigma are computed and available
+
     UwotModel() : n_vertices(0), n_dim(0), embedding_dim(2), n_neighbors(15),
         min_dist(0.1f), spread(1.0f), metric(UWOT_METRIC_EUCLIDEAN),
         is_fitted(false), force_exact_knn(false), use_normalization(false),
@@ -130,7 +140,9 @@ struct UwotModel {
         // Embedding data preservation
         always_save_embedding_data(false),
         // CRC32 validation
-        original_space_crc(0), embedding_space_crc(0), model_version_crc(0x5A4D4F44) { // "UMOD" hex
+        original_space_crc(0), embedding_space_crc(0), model_version_crc(0x5A4D4F44), // "UMOD" hex
+        // Fast transform optimization
+        knn_backend(KnnBackend::HNSW), has_fast_transform_data(false) {
 
         original_space_factory = std::make_unique<hnsw_utils::SpaceFactory>();
         embedding_space_factory = std::make_unique<hnsw_utils::SpaceFactory>();

@@ -215,6 +215,31 @@ namespace persistence_utils {
             endian_utils::write_value(file, model->hnsw_ef_construction);
             endian_utils::write_value(file, model->hnsw_ef_search);
 
+            // FAST TRANSFORM OPTIMIZATION: Save backend type and rho/sigma data (error4c.txt)
+            endian_utils::write_value(file, static_cast<int>(model->knn_backend));
+            endian_utils::write_value(file, model->has_fast_transform_data);
+
+            if (model->has_fast_transform_data) {
+                // Save rho (nearest neighbor distances)
+                size_t rho_size = model->rho.size();
+                endian_utils::write_value(file, rho_size);
+                for (size_t i = 0; i < rho_size; i++) {
+                    endian_utils::write_value(file, model->rho[i]);
+                }
+
+                // Save sigma (bandwidth parameters)
+                size_t sigma_size = model->sigma.size();
+                endian_utils::write_value(file, sigma_size);
+                for (size_t i = 0; i < sigma_size; i++) {
+                    endian_utils::write_value(file, model->sigma[i]);
+                }
+            } else {
+                // No fast transform data - write zero sizes
+                size_t zero = 0;
+                endian_utils::write_value(file, zero);
+                endian_utils::write_value(file, zero);
+            }
+
             // Neighbor statistics (endian-safe)
             endian_utils::write_value(file, model->mean_original_distance);
             endian_utils::write_value(file, model->std_original_distance);
@@ -499,6 +524,48 @@ namespace persistence_utils {
                 !endian_utils::read_value(file, model->hnsw_ef_construction) ||
                 !endian_utils::read_value(file, model->hnsw_ef_search)) {
                 throw std::runtime_error("Failed to read HNSW parameters");
+            }
+
+            // FAST TRANSFORM OPTIMIZATION: Load backend type and rho/sigma data (error4c.txt)
+            int knn_backend_value;
+            if (!endian_utils::read_value(file, knn_backend_value) ||
+                !endian_utils::read_value(file, model->has_fast_transform_data)) {
+                throw std::runtime_error("Failed to read fast transform metadata");
+            }
+            model->knn_backend = static_cast<UwotModel::KnnBackend>(knn_backend_value);
+
+            if (model->has_fast_transform_data) {
+                // Load rho (nearest neighbor distances)
+                size_t rho_size;
+                if (!endian_utils::read_value(file, rho_size)) {
+                    throw std::runtime_error("Failed to read rho array size");
+                }
+                model->rho.resize(rho_size);
+                for (size_t i = 0; i < rho_size; i++) {
+                    if (!endian_utils::read_value(file, model->rho[i])) {
+                        throw std::runtime_error("Failed to read rho data");
+                    }
+                }
+
+                // Load sigma (bandwidth parameters)
+                size_t sigma_size;
+                if (!endian_utils::read_value(file, sigma_size)) {
+                    throw std::runtime_error("Failed to read sigma array size");
+                }
+                model->sigma.resize(sigma_size);
+                for (size_t i = 0; i < sigma_size; i++) {
+                    if (!endian_utils::read_value(file, model->sigma[i])) {
+                        throw std::runtime_error("Failed to read sigma data");
+                    }
+                }
+            } else {
+                // No fast transform data - skip rho/sigma sizes
+                size_t dummy;
+                if (!endian_utils::read_value(file, dummy) || !endian_utils::read_value(file, dummy)) {
+                    throw std::runtime_error("Failed to skip fast transform data sizes");
+                }
+                model->rho.clear();
+                model->sigma.clear();
             }
 
             // Read neighbor statistics (endian-safe)

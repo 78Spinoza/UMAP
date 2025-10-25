@@ -44,6 +44,7 @@ namespace UMAPDemo
                 var (data, labels, uniqueParts) = LoadMammothData();
                 Console.WriteLine($"Loaded: {data.GetLength(0)} points, {data.GetLength(1)} dimensions");
                 Run10kMammothDemo(data, labels, uniqueParts);
+                Run10kMammothTransformDemo(data, labels, uniqueParts);
                 CreateFlagship100KHairyMammoth();
 
                 // Run advanced parameter tuning (UMAP version) - ENABLED
@@ -320,6 +321,59 @@ namespace UMAPDemo
         }
 
         /// <summary>
+        /// Runs a transform demo on the same 10K mammoth dataset using the saved model.
+        /// This demonstrates the transform functionality by loading the saved model and projecting the same data.
+        /// </summary>
+        private static void Run10kMammothTransformDemo(double[,] data, int[] labels, string[] uniqueParts)
+        {
+            Console.WriteLine("🔄 Running 10K Mammoth Transform Demo (Using Saved Model)...");
+
+            string modelPath = Path.Combine(ResultsDir, "mammoth_10k_hnsw.umap");
+
+            if (!File.Exists(modelPath))
+            {
+                Console.WriteLine($"❌ Model file not found: {modelPath}");
+                Console.WriteLine("   Please run the 10K Mammoth Demo first to create the model.");
+                return;
+            }
+
+            var stopwatch = Stopwatch.StartNew();
+
+            // Load the saved model
+            var umap = UMapModel.Load(modelPath);
+            Console.WriteLine($"✅ Model loaded: {modelPath}");
+
+            // Convert double[,] to float[,] for transform API
+            int nSamples = data.GetLength(0);
+            int nFeatures = data.GetLength(1);
+            var floatData = new float[nSamples, nFeatures];
+            for (int i = 0; i < nSamples; i++)
+                for (int j = 0; j < nFeatures; j++)
+                    floatData[i, j] = (float)data[i, j];
+
+            // Transform the same data using the loaded model
+            var transformedEmbedding = umap.Transform(floatData);
+            stopwatch.Stop();
+
+            Console.WriteLine();
+            Console.WriteLine($"✅ Transformed Embedding created: {transformedEmbedding.GetLength(0)} x {transformedEmbedding.GetLength(1)}");
+            Console.WriteLine($"⏱️ Transform time: {stopwatch.Elapsed.TotalSeconds:F2}s");
+
+            // Convert float[,] embedding back to double[,] for visualization
+            int embedSamples = transformedEmbedding.GetLength(0);
+            int embedDims = transformedEmbedding.GetLength(1);
+            var doubleEmbedding = new double[embedSamples, embedDims];
+            for (int i = 0; i < embedSamples; i++)
+                for (int j = 0; j < embedDims; j++)
+                    doubleEmbedding[i, j] = transformedEmbedding[i, j];
+
+            // Create visualizations with custom title and filename for transformed results
+            string transformedTitle = "Mammoth 10k Dataset - Transformed";
+            string transformedFilename = "mammoth_10k_transformed_embedding.png";
+            CreateVisualizations(doubleEmbedding, data, labels, umap, stopwatch.Elapsed.TotalSeconds, uniqueParts, title: transformedTitle, filename: transformedFilename);
+        }
+
+        /// <summary>
         /// Calculates optimal neighbor count using the adaptive formula
         /// </summary>
         private static int CalculateOptimalNeighbors(int nSamples)
@@ -381,7 +435,7 @@ namespace UMAPDemo
                 nNeighbors: 120,       // Updated to 120 as requested
                 minDist: 0.35f,        // Updated to 0.35 as requested
                 spread: 1.0f,
-                nEpochs: 500,
+                nEpochs: 300,
                 metric: DistanceMetric.Euclidean,
                 forceExactKnn: false,
                 autoHNSWParam: false,
@@ -447,7 +501,7 @@ namespace UMAPDemo
         /// <summary>
         /// Creates visualizations for the mammoth demos.
         /// </summary>
-        private static void CreateVisualizations(double[,] embedding, double[,] originalData, int[] labels, UMapModel umap, double executionTime, string[] uniqueParts)
+        private static void CreateVisualizations(double[,] embedding, double[,] originalData, int[] labels, UMapModel umap, double executionTime, string[] uniqueParts, string title = null, string filename = null)
         {
             try
             {
@@ -456,12 +510,13 @@ namespace UMAPDemo
                 Visualizer.PlotOriginalMammoth3DReal(originalData, labels, "Original Mammoth 3D Data", original3DPath);
                 Console.WriteLine($"   ✅ Created: {Path.GetFileName(original3DPath)}");
 
-                string umapPath = Path.Combine(ResultsDir, "mammoth_umap_embedding.png");
+                // Use provided title and filename or fall back to defaults
+                string umapPath = Path.Combine(ResultsDir, filename ?? "mammoth_umap_embedding.png");
                 var modelInfo = umap.ModelInfo;
                 var paramInfo = CreateFitParamInfo(umap, executionTime, "Main_Demo");
 
-                var title = BuildVisualizationTitle(umap);
-                Visualizer.PlotMammothUMAP(embedding, labels, title, umapPath, paramInfo, autoFitAxes: true, partNames: uniqueParts);
+                var displayTitle = title ?? BuildVisualizationTitle(umap);
+                Visualizer.PlotMammothUMAP(embedding, labels, displayTitle, umapPath, paramInfo, autoFitAxes: true, partNames: uniqueParts);
                 Console.WriteLine($"   ✅ Created: {Path.GetFileName(umapPath)}");
                 Console.WriteLine($"   📊 KNN Mode: {paramInfo["KNN_Mode"]}");
                 Console.WriteLine($"   🚀 HNSW Status: ACTIVE"); // UMAP always uses HNSW

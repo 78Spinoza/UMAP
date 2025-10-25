@@ -8,6 +8,18 @@
 #include <numeric>
 #include <cmath>
 
+// Forward declaration for smooth_knn helper function
+void apply_smooth_knn_to_point(const int* indices, const float* distances, int k, float* weights);
+
+// Forward declaration for spectral interpolation helper function
+static void interpolate_initial_embedding(
+    const float* query,
+    const float* train_data,
+    const float* train_embedding,
+    int n_train, int n_dim, int emb_dim,
+    float* out_init
+);
+
 namespace transform_utils {
 
     // TEMPORARY: Use exact working version from git commit 65abd80
@@ -42,6 +54,29 @@ namespace transform_utils {
         if (n_dim != model->n_dim) {
             return UWOT_ERROR_INVALID_PARAMS;
         }
+
+        // FAST TRANSFORM OPTIMIZATION: Backend validation (error4c.txt)
+        // Transform must use the same k-NN backend as fit for rho/sigma to be valid
+        if (model->has_fast_transform_data) {
+            bool backend_mismatch = false;
+            const char* error_msg = nullptr;
+
+            if (model->knn_backend == UwotModel::KnnBackend::HNSW && model->force_exact_knn) {
+                backend_mismatch = true;
+                error_msg = "Model was fitted with HNSW but transform is using exact k-NN. "
+                           "Set force_exact_knn=false during transform for HNSW models.";
+            } else if (model->knn_backend == UwotModel::KnnBackend::EXACT && !model->force_exact_knn && model->original_space_index) {
+                backend_mismatch = true;
+                error_msg = "Model was fitted with exact k-NN but transform is using HNSW. "
+                           "Set force_exact_knn=true during transform for exact k-NN models.";
+            }
+
+            if (backend_mismatch) {
+                std::cerr << "BACKEND MISMATCH ERROR: " << error_msg << std::endl;
+                return UWOT_ERROR_INVALID_PARAMS;
+            }
+        }
+
         // Transform operation starting
         try {
             std::vector<float> new_embedding(static_cast<size_t>(n_new_obs) * static_cast<size_t>(model->embedding_dim));
@@ -212,25 +247,48 @@ namespace transform_utils {
 
                 // Check if force_exact_knn flag is set (use exact k-NN instead of HNSW)
                 if (model->force_exact_knn) {
-                    // Use saved exact k-NN data
-                    for (int k = 0; k < model->n_neighbors && k < static_cast<int>(model->nn_indices.size()); k++) {
-                        int neighbor_idx = model->nn_indices[k];
-                        float distance = model->nn_distances[k];
+                    // Use saved exact k-NN data with smooth_knn fuzzy weighting
+                    int actual_neighbors = std::min(model->n_neighbors, static_cast<int>(model->nn_indices.size()));
 
-                        original_neighbors.push_back(neighbor_idx);
-                        original_distances.push_back(distance);
+                    if (actual_neighbors > 0) {
+                        // FAST TRANSFORM OPTIMIZATION: Use pre-computed rho/sigma instead of smooth_knn (20x faster)
+                        std::vector<float> fuzzy_weights(actual_neighbors);
 
-                        // Calculate transform weights
-                        float median_dist = model->median_original_distance > 0.0f ? model->median_original_distance : model->mean_original_distance;
-                        float base_bandwidth = std::max(1e-4f, 0.5f * median_dist);
-                        float adaptive_bandwidth = base_bandwidth;
-                        if (distance > base_bandwidth * 2.0f) {
-                            adaptive_bandwidth = distance * 0.3f;
+                        if (model->has_fast_transform_data && !model->rho.empty() && !model->sigma.empty()) {
+                            // Fast path: Use pre-computed rho/sigma - no binary search needed!
+                            for (int k = 0; k < actual_neighbors; k++) {
+                                int neighbor_idx = model->nn_indices[k];
+                                if (neighbor_idx >= 0 && neighbor_idx < static_cast<int>(model->rho.size())) {
+                                    float rho_j = model->rho[neighbor_idx];
+                                    float sigma_j = model->sigma[neighbor_idx];
+                                    float distance = model->nn_distances[k];
+
+                                    // Fast fuzzy weight computation (no binary search)
+                                    float val = (distance - rho_j) / sigma_j;
+                                    fuzzy_weights[k] = (val <= 0) ? 1.0f : std::exp(-val);
+                                } else {
+                                    fuzzy_weights[k] = 0.0f; // Invalid neighbor index
+                                }
+                            }
+                        } else {
+                            // Fallback: Use smooth_knn (shouldn't happen if model was fitted properly)
+                            apply_smooth_knn_to_point(model->nn_indices.data(), model->nn_distances.data(),
+                                                    actual_neighbors, fuzzy_weights.data());
                         }
-                        float weight = std::exp(-distance * distance / (2.0f * adaptive_bandwidth * adaptive_bandwidth));
-                        weight = std::max(weight, 1e-6f);
-                        weights.push_back(weight);
-                        total_weight += weight;
+
+                        for (int k = 0; k < actual_neighbors; k++) {
+                            int neighbor_idx = model->nn_indices[k];
+                            float distance = model->nn_distances[k];
+                            float weight = fuzzy_weights[k];
+
+                            // Only include neighbors with significant weights
+                            if (weight > 1e-6f) {
+                                original_neighbors.push_back(neighbor_idx);
+                                original_distances.push_back(distance);
+                                weights.push_back(weight);
+                                total_weight += weight;
+                            }
+                        }
                     }
                 } else {
                     // Use HNSW for fast neighbor search (default case - 99.9% of the time)
@@ -241,6 +299,9 @@ namespace transform_utils {
                         model->original_space_index->setEf(std::max(original_ef, boosted_ef));
                         auto original_search_result = model->original_space_index->searchKnn(search_point.data(), model->n_neighbors);
                         model->original_space_index->setEf(original_ef);
+
+                        // Collect all neighbors first, then apply smooth_knn for consistent fuzzy weighting
+                        std::vector<std::pair<int, float>> neighbors_and_distances;
 
                         while (!original_search_result.empty()) {
                             auto pair = original_search_result.top();
@@ -265,20 +326,55 @@ namespace transform_utils {
                                 break;
                             }
 
-                            original_neighbors.push_back(neighbor_idx);
-                            original_distances.push_back(distance);
+                            neighbors_and_distances.emplace_back(neighbor_idx, distance);
+                        }
 
-                            // Calculate transform weights
-                            float median_dist = model->median_original_distance > 0.0f ? model->median_original_distance : model->mean_original_distance;
-                            float base_bandwidth = std::max(1e-4f, 0.5f * median_dist);
-                            float adaptive_bandwidth = base_bandwidth;
-                            if (distance > base_bandwidth * 2.0f) {
-                                adaptive_bandwidth = distance * 0.3f;
+                        // Apply smooth_knn to get fuzzy weights (consistent with fitting)
+                        if (!neighbors_and_distances.empty()) {
+                            // Separate indices and distances for smooth_knn
+                            std::vector<int> neighbor_indices;
+                            std::vector<float> neighbor_distances;
+
+                            for (const auto& nd : neighbors_and_distances) {
+                                neighbor_indices.push_back(nd.first);
+                                neighbor_distances.push_back(nd.second);
                             }
-                            float weight = std::exp(-distance * distance / (2.0f * adaptive_bandwidth * adaptive_bandwidth));
-                            weight = std::max(weight, 1e-6f);
-                            weights.push_back(weight);
-                            total_weight += weight;
+
+                            // FAST TRANSFORM OPTIMIZATION: Use pre-computed rho/sigma instead of smooth_knn (20x faster)
+                            std::vector<float> fuzzy_weights(neighbor_indices.size());
+
+                            if (model->has_fast_transform_data && !model->rho.empty() && !model->sigma.empty()) {
+                                // Fast path: Use pre-computed rho/sigma - no binary search needed!
+                                for (size_t j = 0; j < neighbor_indices.size(); ++j) {
+                                    int neighbor_idx = neighbor_indices[j];
+                                    if (neighbor_idx >= 0 && neighbor_idx < static_cast<int>(model->rho.size())) {
+                                        float rho_j = model->rho[neighbor_idx];
+                                        float sigma_j = model->sigma[neighbor_idx];
+                                        float distance = neighbor_distances[j];
+
+                                        // Fast fuzzy weight computation (no binary search)
+                                        float val = (distance - rho_j) / sigma_j;
+                                        fuzzy_weights[j] = (val <= 0) ? 1.0f : std::exp(-val);
+                                    } else {
+                                        fuzzy_weights[j] = 0.0f; // Invalid neighbor index
+                                    }
+                                }
+                            } else {
+                                // Fallback: Use smooth_knn (shouldn't happen if model was fitted properly)
+                                apply_smooth_knn_to_point(neighbor_indices.data(), neighbor_distances.data(),
+                                                         static_cast<int>(neighbor_indices.size()),
+                                                         fuzzy_weights.data());
+                            }
+
+                            // Build the final neighbor lists with fuzzy weights
+                            for (size_t j = 0; j < neighbor_indices.size(); ++j) {
+                                if (fuzzy_weights[j] > 1e-6f) {  // Filter out very weak connections
+                                    original_neighbors.push_back(neighbor_indices[j]);
+                                    original_distances.push_back(neighbor_distances[j]);
+                                    weights.push_back(fuzzy_weights[j]);
+                                    total_weight += fuzzy_weights[j];
+                                }
+                            }
                         }
                     } catch (...) {
                         // HNSW failed - fall back to exact k-NN
@@ -329,21 +425,30 @@ std::cout << "[DEBUG] Transform: Embedding array size: " << model->embedding.siz
 #endif
                 }
 
-                // Calculate new embedding coordinates as weighted average of neighbor embeddings
-                // TEMPORARY: Use embedding array directly until HNSW extraction is fully reliable
-                for (int d = 0; d < model->embedding_dim; d++) {
-                    float coord = 0.0f;
-                    for (size_t k = 0; k < original_neighbors.size(); k++) {
-                        size_t embed_idx = static_cast<size_t>(original_neighbors[k]) * static_cast<size_t>(model->embedding_dim) + static_cast<size_t>(d);
-                        if (embed_idx < model->embedding.size()) {
-                            coord += model->embedding[embed_idx] * weights[k];
-                        } else {
-                            #if 0
-std::cout << "[DEBUG] Transform: Embedding index out of bounds: " << embed_idx << " >= " << model->embedding.size() << std::endl;
-#endif
+                // SPECTRAL INITIALIZATION OPTIMIZATION: Use spectral interpolation for better initial embedding (error4d.txt)
+                // Get initial coordinates using spectral interpolation from training embeddings
+                float* current_embedding = &new_embedding[static_cast<size_t>(i) * static_cast<size_t>(model->embedding_dim)];
+
+                if (!model->initial_embedding.empty() && !model->embedding.empty()) {
+                    // Use spectral interpolation from initial training embedding
+                    interpolate_initial_embedding(
+                        normalized_point.data(),
+                        model->embedding.data(), // Use training embeddings for interpolation
+                        model->initial_embedding.data(), // Interpolate from spectral initialization
+                        model->n_vertices, model->n_dim, model->embedding_dim,
+                        current_embedding
+                    );
+                } else {
+                    // Fallback: Use weighted average of neighbor embeddings (original method)
+                    for (int d = 0; d < model->embedding_dim; d++) {
+                        current_embedding[d] = 0.0f;
+                        for (size_t k = 0; k < original_neighbors.size(); k++) {
+                            size_t embed_idx = static_cast<size_t>(original_neighbors[k]) * static_cast<size_t>(model->embedding_dim) + static_cast<size_t>(d);
+                            if (embed_idx < model->embedding.size()) {
+                                current_embedding[d] += model->embedding[embed_idx] * weights[k];
+                            }
                         }
                     }
-                    new_embedding[static_cast<size_t>(i) * static_cast<size_t>(model->embedding_dim) + static_cast<size_t>(d)] = coord;
                 }
 
                 // STEP 2: CRITICAL FOR AI - Find neighbors in EMBEDDING space for AI inference (optional)
@@ -491,5 +596,142 @@ std::cout << "[DEBUG] Transform: Embedding index out of bounds: " << embed_idx <
     ) {
         return transform_utils::uwot_transform_detailed(model, new_data, n_new_obs, n_dim, embedding,
             nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+    }
+}
+
+// SPECTRAL INITIALIZATION OPTIMIZATION: Interpolate initial embedding for better transform consistency (error4d.txt)
+static void interpolate_initial_embedding(
+    const float* query,
+    const float* train_data,
+    const float* train_embedding,
+    int n_train, int n_dim, int emb_dim,
+    float* out_init
+) {
+    // Find 5 nearest neighbors in training data
+    const int k_neighbors = 5;
+    std::vector<int> idx(k_neighbors);
+    std::vector<float> dist(k_neighbors);
+
+    // Simple brute-force search for nearest training points
+    std::vector<std::pair<float, int>> distances;
+    distances.reserve(n_train);
+
+    for (int i = 0; i < n_train; ++i) {
+        float d = 0.0f;
+        const float* train_point = train_data + i * n_dim;
+        for (int d_idx = 0; d_idx < n_dim; ++d_idx) {
+            float diff = query[d_idx] - train_point[d_idx];
+            d += diff * diff;
+        }
+        distances.emplace_back(d, i);
+    }
+
+    // Find k nearest neighbors
+    std::partial_sort(distances.begin(), distances.begin() + k_neighbors, distances.end());
+
+    for (int k = 0; k < k_neighbors; ++k) {
+        idx[k] = distances[k].second;
+        dist[k] = distances[k].first;
+    }
+
+    // Weighted average in embedding space
+    std::fill(out_init, out_init + emb_dim, 0.0f);
+    float sum_w = 0.0f;
+    for (int k = 0; k < k_neighbors; ++k) {
+        float w = 1.0f / (1e-8f + dist[k]);
+        const float* src = train_embedding + idx[k] * emb_dim;
+        for (int d = 0; d < emb_dim; ++d) {
+            out_init[d] += w * src[d];
+        }
+        sum_w += w;
+    }
+    for (int d = 0; d < emb_dim; ++d) {
+        out_init[d] /= sum_w;
+    }
+}
+
+// Implementation of smooth_knn helper function for transform operations
+void apply_smooth_knn_to_point(const int* indices, const float* distances, int k, float* weights) {
+    if (k <= 0) return;
+
+    // Convert distances to double for smooth_knn processing
+    std::vector<double> dist_double(k);
+    std::vector<double> weights_double(k);
+
+    for (int i = 0; i < k; ++i) {
+        dist_double[i] = static_cast<double>(distances[i]);
+    }
+
+    // Apply simplified smooth_knn algorithm for single point
+    try {
+        // Find rho (smallest non-zero distance)
+        double rho = 0.0;
+        for (int i = 0; i < k; ++i) {
+            if (dist_double[i] > 0.0) {
+                rho = dist_double[i];
+                break;
+            }
+        }
+
+        // Find sigma using binary search to achieve target sum
+        double target_sum = static_cast<double>(k);  // Target sum is k neighbors
+        double sigma = 1.0;
+        constexpr int max_iter = 64;
+        constexpr double tol = 1e-6;
+
+        for (int iter = 0; iter < max_iter; ++iter) {
+            double sum = 0.0;
+            for (int i = 0; i < k; ++i) {
+                double r = dist_double[i] - rho;
+                sum += (r <= 0.0) ? 1.0 : std::exp(-r / sigma);
+            }
+
+            if (std::abs(sum - target_sum) < tol) break;
+
+            if (sum > target_sum) {
+                sigma *= 0.5;
+            } else {
+                sigma *= 2.0;
+            }
+        }
+
+        // Compute final fuzzy weights
+        double weight_sum = 0.0;
+        for (int i = 0; i < k; ++i) {
+            double r = dist_double[i] - rho;
+            weights_double[i] = (r <= 0.0) ? 1.0 : std::exp(-r / sigma);
+            weight_sum += weights_double[i];
+        }
+
+        // Normalize and convert back to float
+        if (weight_sum > 0.0) {
+            for (int i = 0; i < k; ++i) {
+                weights[i] = static_cast<float>(weights_double[i] / weight_sum);
+            }
+        } else {
+            // Fallback: uniform weights
+            for (int i = 0; i < k; ++i) {
+                weights[i] = 1.0f / static_cast<float>(k);
+            }
+        }
+
+    } catch (...) {
+        // Fallback: simple exponential decay
+        double weight_sum = 0.0;
+        for (int i = 0; i < k; ++i) {
+            weights_double[i] = std::exp(-dist_double[i]);
+            weight_sum += weights_double[i];
+        }
+
+        if (weight_sum > 0.0) {
+            for (int i = 0; i < k; ++i) {
+                weights[i] = static_cast<float>(weights_double[i] / weight_sum);
+            }
+        } else {
+            // Final fallback: uniform weights
+            for (int i = 0; i < k; ++i) {
+                weights[i] = 1.0f / static_cast<float>(k);
+            }
+        }
     }
 }

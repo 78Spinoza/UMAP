@@ -3,8 +3,13 @@
 
 #include "hnswlib.h"
 #include "knncolle/knncolle.hpp"
+#include "smooth_knn.h"
+#include "NeighborList.hpp"
 #include <vector>
 #include <memory>
+#include <atomic>
+#include <cmath>
+#include <omp.h>
 
 namespace uwot {
 
@@ -359,6 +364,212 @@ private:
             return data_.data() + i * num_dim_;
         }
     };
+};
+
+/**
+ * Fuzzy k-NN Searcher that applies smooth_knn preprocessing
+ * This wrapper transforms raw HNSW distances into fuzzy simplicial sets
+ * compatible with umappp's expected input format
+ */
+template<typename Index_, typename Float_>
+class FuzzyKnnSearcher {
+private:
+    std::unique_ptr<HnswSearcher<Index_, Float_>> base_searcher_;
+    int n_neighbors_;
+    double local_connectivity_;
+    bool parallel_;
+
+public:
+    FuzzyKnnSearcher(std::unique_ptr<HnswSearcher<Index_, Float_>> base_searcher,
+                    int n_neighbors = 15,
+                    double local_connectivity = 1.0,
+                    bool parallel = true)
+        : base_searcher_(std::move(base_searcher)),
+          n_neighbors_(n_neighbors),
+          local_connectivity_(local_connectivity),
+          parallel_(parallel) {}
+
+    ~FuzzyKnnSearcher() = default;
+
+    // Search for a single observation and return fuzzy neighbors
+    void search_fuzzy(Index_ query_idx, std::vector<Index_>* indices, std::vector<Float_>* weights) {
+        if (!indices || !weights) return;
+
+        indices->clear();
+        weights->clear();
+
+        // 1. Get raw k-NN from HNSW
+        std::vector<Index_> raw_indices;
+        std::vector<Float_> raw_distances;
+        base_searcher_->search(query_idx, n_neighbors_, &raw_indices, &raw_distances);
+
+        if (raw_indices.empty()) return;
+
+        // 2. Apply smooth_knn to convert distances to fuzzy weights
+        indices->resize(raw_indices.size());
+        weights->resize(raw_indices.size());
+
+        apply_smooth_knn(raw_indices.data(), raw_distances.data(),
+                        static_cast<Index_>(raw_indices.size()),
+                        indices->data(), weights->data());
+    }
+
+    // Search for multiple observations (batch processing with optional parallelization)
+    umappp::NeighborList<Index_, Float_> search_batch(const Float_* query_data, Index_ n_queries, Index_ n_dim) {
+        umappp::NeighborList<Index_, Float_> result(n_queries);
+
+        if (parallel_ && n_queries > 1) {
+            // Parallel processing for multiple queries
+            #pragma omp parallel for if(n_queries > 4)
+            for (Index_ q = 0; q < n_queries; ++q) {
+                std::vector<Index_> indices;
+                std::vector<Float_> weights;
+
+                // Search using query data point
+                search_fuzzy_query(&query_data[q * n_dim], n_dim, &indices, &weights);
+
+                // Build neighbor list for this query
+                for (size_t i = 0; i < indices.size(); ++i) {
+                    if (weights[i] > 1e-6f) {  // Filter out very weak connections
+                        result[q].emplace_back(indices[i], weights[i]);
+                    }
+                }
+            }
+        } else {
+            // Sequential processing
+            for (Index_ q = 0; q < n_queries; ++q) {
+                std::vector<Index_> indices;
+                std::vector<Float_> weights;
+
+                search_fuzzy_query(&query_data[q * n_dim], n_dim, &indices, &weights);
+
+                for (size_t i = 0; i < indices.size(); ++i) {
+                    if (weights[i] > 1e-6f) {
+                        result[q].emplace_back(indices[i], weights[i]);
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
+private:
+    // Search for a query point by coordinate (instead of index)
+    void search_fuzzy_query(const Float_* query, Index_ n_dim, std::vector<Index_>* indices, std::vector<Float_>* weights) {
+        if (!indices || !weights) return;
+
+        indices->clear();
+        weights->clear();
+
+        // 1. Get raw k-NN from HNSW
+        std::vector<Index_> raw_indices;
+        std::vector<Float_> raw_distances;
+        base_searcher_->search(query, n_neighbors_, &raw_indices, &raw_distances);
+
+        if (raw_indices.empty()) return;
+
+        // 2. Apply smooth_knn to convert distances to fuzzy weights
+        indices->resize(raw_indices.size());
+        weights->resize(raw_indices.size());
+
+        apply_smooth_knn(raw_indices.data(), raw_distances.data(),
+                        static_cast<Index_>(raw_indices.size()),
+                        indices->data(), weights->data());
+    }
+
+    // Apply smooth_knn to convert raw distances to fuzzy weights
+    void apply_smooth_knn(const Index_* indices, const Float_* distances, Index_ k,
+                         Index_* out_indices, Float_* out_weights) {
+
+        // Convert distances to double for smooth_knn
+        std::vector<double> dist_double(k);
+        std::vector<double> weights_double(k);
+
+        for (Index_ i = 0; i < k; ++i) {
+            dist_double[i] = static_cast<double>(distances[i]);
+            out_indices[i] = indices[i];
+        }
+
+        // Apply smooth_knn algorithm
+        constexpr double tol = 1e-6;
+        constexpr size_t n_iter = 64;
+        constexpr double min_k_dist_scale = 1.0;
+        std::vector<double> nn_ptr = { static_cast<size_t>(k) };  // Fixed k neighbors per point
+        std::vector<double> target = { static_cast<double>(n_neighbors_) };
+        std::vector<double> sigmas(k);
+        std::vector<double> rhos(k);
+        std::atomic_size_t n_search_fails{0};
+
+        // smooth_knn expects the entire distance matrix, but we're processing one point at a time
+        // So we need to adapt the interface
+        try {
+            // Create fuzzy weights using simplified smooth_knn for single point
+            compute_fuzzy_weights_single_point(dist_double.data(), k, weights_double.data());
+        } catch (...) {
+            // Fallback: use simple exponential decay if smooth_knn fails
+            for (Index_ i = 0; i < k; ++i) {
+                weights_double[i] = std::exp(-dist_double[i]);
+            }
+        }
+
+        // Convert back to float and normalize
+        double weight_sum = 0.0;
+        for (Index_ i = 0; i < k; ++i) {
+            weight_sum += weights_double[i];
+        }
+
+        if (weight_sum > 0.0) {
+            for (Index_ i = 0; i < k; ++i) {
+                out_weights[i] = static_cast<Float_>(weights_double[i] / weight_sum);
+            }
+        } else {
+            // Fallback: uniform weights
+            for (Index_ i = 0; i < k; ++i) {
+                out_weights[i] = 1.0f / static_cast<Float_>(k);
+            }
+        }
+    }
+
+    // Simplified fuzzy weight computation for single point
+    void compute_fuzzy_weights_single_point(const double* distances, Index_ k, double* weights) {
+        // Find rho (smallest non-zero distance)
+        double rho = 0.0;
+        for (Index_ i = 0; i < k; ++i) {
+            if (distances[i] > 0.0) {
+                rho = distances[i];
+                break;
+            }
+        }
+
+        // Find sigma using binary search to achieve target sum
+        double target_sum = static_cast<double>(n_neighbors_);
+        double sigma = 1.0;
+        constexpr int max_iter = 64;
+        constexpr double tol = 1e-6;
+
+        for (int iter = 0; iter < max_iter; ++iter) {
+            double sum = 0.0;
+            for (Index_ i = 0; i < k; ++i) {
+                double r = distances[i] - rho;
+                sum += (r <= 0.0) ? 1.0 : std::exp(-r / sigma);
+            }
+
+            if (std::abs(sum - target_sum) < tol) break;
+
+            if (sum > target_sum) {
+                sigma *= 0.5;
+            } else {
+                sigma *= 2.0;
+            }
+        }
+
+        // Compute final weights
+        for (Index_ i = 0; i < k; ++i) {
+            double r = distances[i] - rho;
+            weights[i] = (r <= 0.0) ? 1.0 : std::exp(-r / sigma);
+        }
+    }
 };
 
 } // namespace uwot
