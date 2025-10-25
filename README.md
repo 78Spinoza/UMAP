@@ -108,7 +108,7 @@ BuildDockerLinuxWindows.bat # Builds both Windows + Linux with Docker
 
 **Note**: The C# API remains identical, so existing code continues to work but now benefits from superior umappp algorithms and all advanced features.
 
-## 🎉 **Latest Update v3.33.1** - Dual-Mode Exact k-NN + CPU Core Reporting
+## 🎉 **Latest Update v3.34.0** - Critical Save/Load AccessViolation Fix + Always-On Normalization
 
 **MAJOR FEATURE RELEASE: Complete dual-mode UMAP with exact k-NN support and performance monitoring!**
 

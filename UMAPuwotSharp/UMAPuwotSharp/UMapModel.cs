@@ -306,7 +306,7 @@ namespace UMAPuwotSharp
         #region Constants
 
         // Expected DLL version - must match C++ UWOT_WRAPPER_VERSION_STRING
-        private const string EXPECTED_DLL_VERSION = "3.33.1";
+        private const string EXPECTED_DLL_VERSION = "3.34.0";
 
         #endregion
 

@@ -407,9 +407,7 @@ namespace hnsw_utils {
     std::unique_ptr<hnswlib::HierarchicalNSW<float>> create_hnsw_index(
         hnswlib::SpaceInterface<float>* space, int n_obs, int hnsw_M, int hnsw_ef_construction, int hnsw_ef_search) {
 
-        // Memory estimation for HNSW index
-        size_t estimated_memory_mb = ((size_t)n_obs * hnsw_M * 4 * 2) / (1024 * 1024);
-        // Removed debug output for production build
+        // Memory estimation for HNSW index (removed unused variable for clean build)
 
         auto index = std::make_unique<hnswlib::HierarchicalNSW<float>>(
             space, n_obs, hnsw_M, hnsw_ef_construction);
@@ -448,13 +446,12 @@ namespace hnsw_utils {
     // Temporary normalization utilities (will be moved to separate module later)
     namespace NormalizationPipeline {
         int determine_normalization_mode(UwotMetric metric) {
-            // CRITICAL: UMAP should work on RAW data, not normalized!
-            // Z-score normalization destroys the distance relationships UMAP needs
+            // NORMALIZATION IS ALWAYS ON BY DEFAULT for consistency and better UMAP performance
             if (metric == UWOT_METRIC_COSINE) {
                 return 2; // L2 normalization for cosine (required for inner product space)
             }
-            // All other metrics: NO normalization - use raw data
-            return 0; // No normalization
+            // All other metrics: Z-score normalization for better UMAP performance
+            return 1; // Z-score normalization (mean=0, std=1)
         }
 
         bool normalize_data_consistent(std::vector<float>& input_data, std::vector<float>& output_data,

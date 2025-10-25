@@ -131,6 +131,12 @@ public:
     // Method to get the raw data pointer for observation i
     virtual const Float_* get_observation(Index_ i) const = 0;
 
+    // Release ownership of HNSW index and space for external use (e.g., for transform)
+    // After calling this, the wrapper no longer owns these resources
+    std::pair<std::unique_ptr<hnswlib::HierarchicalNSW<Float_>>, std::unique_ptr<hnswlib::SpaceInterface<Float_>>> release_index() {
+        return std::make_pair(std::move(hnsw_index_), std::move(space_));
+    }
+
     // Friend class to allow searcher access to private members
     friend class HnswSearcher<Index_, Float_>;
 };

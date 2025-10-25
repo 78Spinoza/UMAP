@@ -15,7 +15,6 @@ struct UwotModel {
     float min_dist;
     float spread; // UMAP spread parameter (controls global scale)
     UwotMetric metric;
-    float a, b; // UMAP curve parameters
     bool is_fitted;
     bool force_exact_knn; // Override flag to force brute-force k-NN
 
@@ -114,7 +113,7 @@ struct UwotModel {
     uint32_t model_version_crc;        // CRC32 of model structure version
 
     UwotModel() : n_vertices(0), n_dim(0), embedding_dim(2), n_neighbors(15),
-        min_dist(0.1f), spread(1.0f), metric(UWOT_METRIC_EUCLIDEAN), a(1.929f), b(0.7915f),
+        min_dist(0.1f), spread(1.0f), metric(UWOT_METRIC_EUCLIDEAN),
         is_fitted(false), force_exact_knn(false), use_normalization(false),
         // Original space statistics
         min_original_distance(0.0f), max_original_distance(0.0f), mean_original_distance(0.0f),

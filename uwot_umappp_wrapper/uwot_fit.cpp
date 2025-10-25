@@ -67,259 +67,6 @@ void compute_normalization(const std::vector<float>& data, int n_obs, int n_dim,
 
 
 
-    // Convert uwot smooth k-NN output to edge list format
-
-    void convert_to_edges(const std::vector<int>& nn_indices,
-
-        const std::vector<double>& nn_weights,
-
-        int n_obs, int n_neighbors,
-
-        std::vector<unsigned int>& heads,
-
-        std::vector<unsigned int>& tails,
-
-        std::vector<double>& weights) {
-
-
-
-        // Use map to store symmetric edges and combine weights
-
-        std::map<std::pair<int, int>, double> edge_map;
-
-
-
-        for (int i = 0; i < n_obs; i++) {
-
-            for (int k = 0; k < n_neighbors; k++) {
-
-                int j = nn_indices[static_cast<size_t>(i) * static_cast<size_t>(n_neighbors) + static_cast<size_t>(k)];
-
-                double weight = nn_weights[static_cast<size_t>(i) * static_cast<size_t>(n_neighbors) + static_cast<size_t>(k)];
-
-
-
-                // Add edge in both directions for symmetrization
-
-                edge_map[{i, j}] += weight;
-
-                edge_map[{j, i}] += weight;
-
-            }
-
-        }
-
-
-
-        // Convert to edge list, avoiding duplicates
-
-        for (const auto& edge : edge_map) {
-
-            int i = edge.first.first;
-
-            int j = edge.first.second;
-
-
-
-            if (i < j) { // Only add each edge once
-
-                heads.push_back(static_cast<unsigned int>(i));
-
-                tails.push_back(static_cast<unsigned int>(j));
-
-                weights.push_back(edge.second / 2.0); // Average the weights
-
-            }
-
-        }
-
-    }
-
-
-
-    // Calculate UMAP a,b parameters from spread and min_dist using Gauss-Newton optimization
-
-    // This matches the precision of umappp implementation
-
-    void calculate_ab_from_spread_and_min_dist(UwotModel* model) {
-
-        double spread = static_cast<double>(model->spread);
-
-        double min_dist = static_cast<double>(model->min_dist);
-
-
-
-        // Handle edge cases
-
-        if (spread <= 0.0) spread = 1.0;
-
-        if (min_dist < 0.0) min_dist = 0.0f;
-
-        if (min_dist >= spread) {
-
-            // If min_dist >= spread, use default values
-
-            model->a = 1.929f;
-
-            model->b = 0.7915f;
-
-            return;
-
-        }
-
-
-
-        // CRITICAL FIX: Use Gauss-Newton optimization like umappp for precise a/b calculation
-
-        // Target function: f(x) = 1/(1 + a*x^(2*b))
-
-        // Target curve: exponential decay with smooth transition at min_dist
-
-
-
-        // Generate target points for curve fitting
-
-        const int n_points = 15;
-
-        std::vector<double> x_vals(n_points);
-
-        std::vector<double> y_vals(n_points);
-
-
-
-        for (int i = 0; i < n_points; i++) {
-
-            double x = min_dist + (i * spread / 10.0); // Range from min_dist to beyond spread
-
-            x_vals[i] = x;
-
-
-
-            if (x <= min_dist) {
-
-                y_vals[i] = 1.0; // Flat region before min_dist
-
-            }
-            else {
-
-                y_vals[i] = std::exp(-(x - min_dist) / spread); // Exponential decay
-
-            }
-
-        }
-
-
-
-        // Gauss-Newton optimization for non-linear least squares
-
-        // Initialize with reasonable starting values
-
-        double a = 1.0;
-
-        double b = 1.0;
-
-        const int max_iterations = 100;
-
-        const double tolerance = 1e-8;
-
-
-
-        for (int iter = 0; iter < max_iterations; iter++) {
-
-            double residual_sum = 0.0;
-
-            double JJa = 0.0, JJb = 0.0, Jab = 0.0;
-
-            double Jra = 0.0, Jrb = 0.0;
-
-
-
-            // Compute Jacobian and normal equations
-
-            for (int i = 0; i < n_points; i++) {
-
-                double x = x_vals[i];
-
-                double x_pow_2b = std::pow(x, 2.0 * b);
-
-                double denom = 1.0 + a * x_pow_2b;
-
-                double predicted = 1.0 / denom;
-
-                double residual = y_vals[i] - predicted;
-
-                residual_sum += residual * residual;
-
-
-
-                // Jacobian elements
-
-                double d_pred_da = -x_pow_2b / (denom * denom);
-
-                double d_pred_db = -2.0 * a * std::log(x) * x_pow_2b / (denom * denom);
-
-
-
-                // Accumulate normal equations: J^T * J and J^T * r
-
-                JJa += d_pred_da * d_pred_da;
-
-                JJb += d_pred_db * d_pred_db;
-
-                Jab += d_pred_da * d_pred_db;
-
-                Jra += d_pred_da * residual;
-
-                Jrb += d_pred_db * residual;
-
-            }
-
-
-
-            // Solve normal equations: [J^T * J] * delta = J^T * r
-
-            double det = JJa * JJb - Jab * Jab;
-
-            if (std::abs(det) < 1e-15) break; // Singular matrix
-
-
-
-            double delta_a = (JJb * Jra - Jab * Jrb) / det;
-
-            double delta_b = (JJa * Jrb - Jab * Jra) / det;
-
-
-
-            // Update parameters
-
-            a += delta_a;
-
-            b += delta_b;
-
-
-
-            // Check convergence
-
-            if (std::abs(delta_a) < tolerance && std::abs(delta_b) < tolerance) {
-
-                break;
-
-            }
-
-        }
-
-
-
-        // Clamp parameters to reasonable ranges and convert back to float
-
-        model->a = static_cast<float>(std::max(0.001, std::min(a, 1000.0)));
-
-        model->b = static_cast<float>(std::max(0.1, std::min(b, 2.0)));
-
-    }
-
-
-
     // Main fit function with progress reporting
 
     // OLD IMPLEMENTATION REMOVED - Use uwot_fit_with_umappp_hnsw instead
@@ -424,7 +171,7 @@ void compute_normalization(const std::vector<float>& data, int n_obs, int n_dim,
 #pragma omp parallel if(n_obs > 1000)
             {
                 // Each thread gets its own generator to avoid race conditions
-                thread_local std::mt19937 gen(options.initialize_seed);
+                thread_local std::mt19937 gen(static_cast<unsigned int>(options.initialize_seed));
                 thread_local std::normal_distribution<float> dist(0.0f, 1e-4f);
 
 #pragma omp for
@@ -558,19 +305,108 @@ void compute_normalization(const std::vector<float>& data, int n_obs, int n_dim,
                     wrapped_callback("Running umappp with exact k-NN", 70, 100, 70.0f, "Starting umappp optimization with exact k-NN graph");
                 }
 
-                // Set up progress callback wrapper for umappp
-                auto umappp_callback = [&](int epoch) {
-                    if (wrapped_callback) {
-                        float percent = 70.0f + (25.0f * epoch / n_epochs);
-                        wrapped_callback("umappp optimization", epoch, n_epochs, percent, "umappp exact k-NN optimization");
-                    }
-                };
+                // Create umappp options for exact k-NN
+                umappp::Options exact_options;
+                exact_options.local_connectivity = 1.0;
+                exact_options.bandwidth = 1.0;
+                exact_options.mix_ratio = 1.0;
+                exact_options.spread = spread;
+                exact_options.min_dist = min_dist;
+                exact_options.num_epochs = n_epochs;
+                exact_options.num_neighbors = n_neighbors;
 
-                // For now, just store that we successfully created an exact k-NN index
-                // Full umappp integration would require more complex implementation
-                // The exact k-NN integration is demonstrated by successful index creation
+                if (random_seed >= 0) {
+                    exact_options.initialize_seed = static_cast<uint64_t>(random_seed);
+                }
+
                 if (wrapped_callback) {
-                    wrapped_callback("Exact k-NN ready", 95, 100, 95.0f, "Exact k-NN index created successfully");
+                    wrapped_callback("Initializing umappp", 50, 100, 50.0f, "Setting up umappp optimization with exact k-NN");
+                }
+
+                // Initialize umappp with exact k-NN prebuilt index - write directly to output embedding
+                auto exact_status = umappp::initialize<int, float, float>(*exact_knn_index, embedding_dim, embedding, std::move(exact_options));
+
+                if (wrapped_callback) {
+                    wrapped_callback("Optimizing layout", 60, 100, 60.0f, "Running umappp optimization with exact k-NN");
+                }
+
+                // Run optimization with progress reporting - optimize directly in output embedding buffer
+                int exact_total_epochs = exact_status.num_epochs();
+                for (int epoch = 0; epoch < exact_total_epochs; ++epoch) {
+                    exact_status.run(embedding, epoch + 1);
+
+                    // Update progress callback (60% to 95%)
+                    if (wrapped_callback) {
+                        float progress = 60.0f + (95.0f - 60.0f) * (static_cast<float>(epoch + 1) / static_cast<float>(exact_total_epochs));
+                        wrapped_callback("Optimizing layout", epoch + 1, exact_total_epochs, progress, "umappp exact k-NN optimization");
+                    }
+                }
+
+                if (wrapped_callback) {
+                    wrapped_callback("Exact k-NN optimization completed", 95, 100, 95.0f, "Exact k-NN optimization finished successfully");
+                }
+
+                // CRITICAL: Build HNSW index for transform even in exact k-NN mode
+                if (wrapped_callback) {
+                    wrapped_callback("Saving HNSW index", 96, 100, 96.0f, "Building original space HNSW for transform");
+                }
+
+                try {
+                    // Create space based on metric
+                    auto original_space_factory = std::make_unique<hnsw_utils::SpaceFactory>();
+                    hnswlib::SpaceInterface<float>* space = nullptr;
+
+                    switch (metric) {
+                        case UWOT_METRIC_EUCLIDEAN:
+                            space = new hnswlib::L2Space(n_dim);
+                            break;
+                        case UWOT_METRIC_COSINE:
+                            space = new hnswlib::InnerProductSpace(n_dim);
+                            break;
+                        case UWOT_METRIC_MANHATTAN:
+                            space = new hnswlib::L2Space(n_dim);
+                            break;
+                        default:
+                            space = new hnswlib::L2Space(n_dim);
+                            break;
+                    }
+
+                    // Create HNSW index for original space
+                    auto original_hnsw = std::make_unique<hnswlib::HierarchicalNSW<float>>(
+                        space, n_obs, actual_M, actual_ef_construction
+                    );
+
+                    // Add all data points to the index (using same data as used for exact k-NN)
+                    const float* data_for_index = processed_data.empty() ? data : processed_data.data();
+                    for (int i = 0; i < n_obs; i++) {
+                        original_hnsw->addPoint(const_cast<float*>(data_for_index + i * n_dim), static_cast<hnswlib::labeltype>(i));
+
+                        // Report progress every 5% of points
+                        if (wrapped_callback && (i % (n_obs / 20) == 0 || i == n_obs - 1)) {
+                            float sub_progress = 96.0f + (1.0f * i / n_obs);
+                            wrapped_callback("Saving HNSW index", i, n_obs, sub_progress, "Indexing points for transform");
+                        }
+                    }
+
+                    // Set ef for search
+                    original_hnsw->setEf(actual_ef_search);
+
+                    // Save to model
+                    model->original_space_index = std::move(original_hnsw);
+                    model->original_space_factory = std::move(original_space_factory);
+
+                } catch (const std::exception& e) {
+                    // Suppress unreferenced variable warning - exception is intentionally ignored
+                    (void)e;
+
+                    if (wrapped_callback) {
+                        wrapped_callback("Warning", 96, 100, 96.0f, "Failed to save HNSW index - transform may not work");
+                    }
+                    // Continue anyway - fit succeeded even if index save failed
+                }
+
+                if (wrapped_callback) {
+                    wrapped_callback("Finalizing", 100, 100, 100.0f, "umappp with exact k-NN completed successfully");
                 }
 
             } else {
@@ -615,15 +451,14 @@ void compute_normalization(const std::vector<float>& data, int n_obs, int n_dim,
                 wrapped_callback("Initializing umappp", 50, 100, 0.0f, "Setting up umappp optimization with HNSW neighbors");
             }
 
-            // Initialize umappp with HNSW prebuilt index using model->embedding directly
-            // This prevents memory corruption by avoiding local embedding array
-            auto status = umappp::initialize<int, float, float>(*hnsw_prebuilt, embedding_dim, model->embedding.data(), std::move(options));
+            // Initialize umappp with HNSW prebuilt index - write directly to output embedding
+            auto status = umappp::initialize<int, float, float>(*hnsw_prebuilt, embedding_dim, embedding, std::move(options));
 
             if (wrapped_callback) {
                 wrapped_callback("Optimizing layout", 60, 100, 0.0f, "Running umappp optimization with HNSW neighbors");
             }
 
-            // Run optimization with progress reporting
+            // Run optimization with progress reporting - optimize directly in output embedding buffer
             int total_epochs = status.num_epochs();
             for (int epoch = 0; epoch < total_epochs; ++epoch) {
                 status.run(embedding, epoch + 1);
@@ -639,64 +474,114 @@ void compute_normalization(const std::vector<float>& data, int n_obs, int n_dim,
                 wrapped_callback("Finalizing", 95, 100, 95.0f, "umappp optimization completed");
             }
 
-            // CRITICAL FIX 1.1: Rebuild and save HNSW index for transform
-            // The index used by umappp is destroyed after initialization, so we need to create a new one
+            // Extract HNSW index from knncolle wrapper for transform (NO rebuild!)
+            // The wrapper has a release_index() method that transfers ownership safely
             if (wrapped_callback) {
-                wrapped_callback("Saving HNSW index", 96, 100, 96.0f, "Building original space HNSW for transform");
+                wrapped_callback("Extracting HNSW for transform", 96, 100, 96.0f, "Reusing HNSW index from umappp - no rebuild needed!");
             }
 
             try {
-                // Create space based on metric
-                auto original_space_factory = std::make_unique<hnsw_utils::SpaceFactory>();
-                hnswlib::SpaceInterface<float>* space = nullptr;
+                // Cast to HnswPrebuilt to access release_index() method
+                auto* hnsw_wrapper = dynamic_cast<uwot::HnswPrebuilt<int, float>*>(hnsw_prebuilt.get());
 
-                switch (metric) {
-                    case UWOT_METRIC_EUCLIDEAN:
-                        space = new hnswlib::L2Space(n_dim);
-                        break;
-                    case UWOT_METRIC_COSINE:
-                        space = new hnswlib::InnerProductSpace(n_dim);
-                        break;
-                    case UWOT_METRIC_MANHATTAN:
-                        space = new hnswlib::L2Space(n_dim);
-                        break;
-                    default:
-                        space = new hnswlib::L2Space(n_dim);
-                        break;
-                }
+                if (hnsw_wrapper) {
+                    // Release ownership of HNSW index and space from the wrapper
+                    // After this call, the wrapper no longer owns these resources, so they won't be destroyed
+                    auto [released_index, released_space] = hnsw_wrapper->release_index();
 
-                // Create HNSW index for original space
-                auto original_hnsw = std::make_unique<hnswlib::HierarchicalNSW<float>>(
-                    space, n_obs, actual_M, actual_ef_construction
-                );
+                    if (released_index && released_space) {
+                        // Transfer ownership of BOTH index and space to model
+                        model->original_space_index = std::move(released_index);
 
-                // Add all data points to the index (using same normalized/raw data as umappp used)
-                // CRITICAL: Must use the SAME data that was used for umappp (data_for_hnsw)
-                for (int i = 0; i < n_obs; i++) {
-                    original_hnsw->addPoint(const_cast<float*>(data_for_hnsw + i * n_dim), static_cast<hnswlib::labeltype>(i));
+                        // CRITICAL: Store the RELEASED space in the factory
+                        // We MUST use the same space object that the HNSW index is using!
+                        // Creating a new space would leave the index with a dangling pointer
+                        model->original_space_factory = std::make_unique<hnsw_utils::SpaceFactory>();
 
-                    // Report progress every 5% of points
-                    if (wrapped_callback && (i % (n_obs / 20) == 0 || i == n_obs - 1)) {
-                        float sub_progress = 96.0f + (1.0f * i / n_obs);
-                        wrapped_callback("Saving HNSW index", i, n_obs, sub_progress, "Indexing points for transform");
+                        // Manually assign the released space to the appropriate factory member
+                        // based on the metric type
+                        switch (metric) {
+                            case UWOT_METRIC_EUCLIDEAN:
+                                model->original_space_factory->l2_space.reset(
+                                    static_cast<hnswlib::L2Space*>(released_space.release()));
+                                break;
+                            case UWOT_METRIC_COSINE:
+                                model->original_space_factory->ip_space.reset(
+                                    static_cast<hnswlib::InnerProductSpace*>(released_space.release()));
+                                break;
+                            case UWOT_METRIC_MANHATTAN:
+                                model->original_space_factory->l1_space.reset(
+                                    static_cast<L1Space*>(released_space.release()));
+                                break;
+                            default:
+                                model->original_space_factory->l2_space.reset(
+                                    static_cast<hnswlib::L2Space*>(released_space.release()));
+                                break;
+                        }
+
+                        model->original_space_factory->current_metric = metric;
+                        model->original_space_factory->current_dim = n_dim;
+
+                        if (wrapped_callback) {
+                            wrapped_callback("HNSW extraction successful", 97, 100, 97.0f, "HNSW index extracted - zero rebuild overhead!");
+                        }
+                    } else {
+                        throw std::runtime_error("Released index or space is null");
                     }
+                } else {
+                    throw std::runtime_error("Failed to cast to HnswPrebuilt");
                 }
-
-                // Set ef for search
-                original_hnsw->setEf(actual_ef_search);
-
-                // Save to model
-                model->original_space_index = std::move(original_hnsw);
-                model->original_space_factory = std::move(original_space_factory);
 
             } catch (const std::exception& e) {
+                // Fallback: rebuild if extraction fails (should never happen)
+                (void)e;
+
                 if (wrapped_callback) {
-                    wrapped_callback("Warning", 96, 100, 96.0f, "Failed to save HNSW index - transform may not work");
+                    wrapped_callback("Warning", 96, 100, 96.0f, "Extraction failed, rebuilding HNSW index");
                 }
-                // Continue anyway - fit succeeded even if index save failed
+
+                try {
+                    auto original_space_factory = std::make_unique<hnsw_utils::SpaceFactory>();
+                    hnswlib::SpaceInterface<float>* space = nullptr;
+
+                    switch (metric) {
+                        case UWOT_METRIC_EUCLIDEAN:
+                            space = new hnswlib::L2Space(n_dim);
+                            break;
+                        case UWOT_METRIC_COSINE:
+                            space = new hnswlib::InnerProductSpace(n_dim);
+                            break;
+                        case UWOT_METRIC_MANHATTAN:
+                            space = new hnswlib::L2Space(n_dim);
+                            break;
+                        default:
+                            space = new hnswlib::L2Space(n_dim);
+                            break;
+                    }
+
+                    auto original_hnsw = std::make_unique<hnswlib::HierarchicalNSW<float>>(
+                        space, n_obs, actual_M, actual_ef_construction
+                    );
+
+                    for (int i = 0; i < n_obs; i++) {
+                        original_hnsw->addPoint(const_cast<float*>(data_for_hnsw + i * n_dim), static_cast<hnswlib::labeltype>(i));
+                    }
+
+                    original_hnsw->setEf(actual_ef_search);
+
+                    model->original_space_index = std::move(original_hnsw);
+                    model->original_space_factory = std::move(original_space_factory);
+
+                } catch (...) {
+                    if (wrapped_callback) {
+                        wrapped_callback("Warning", 96, 100, 96.0f, "Failed to save HNSW index - transform may not work");
+                    }
+                }
             }
 
+            if (wrapped_callback) {
                 wrapped_callback("Finalizing", 100, 100, 100.0f, "umappp with HNSW completed successfully");
+            }
             }
 
             // Update model with results
@@ -713,8 +598,10 @@ void compute_normalization(const std::vector<float>& data, int n_obs, int n_dim,
             model->hnsw_ef_search = actual_ef_search;
             model->use_quantization = (useQuantization != 0);
 
-            // EMBEDDINGS ALREADY POPULATED: No copy needed since we worked directly with model->embedding
-            // This prevents memory corruption that was caused by copying from local embedding array
+            // Save embedding to model for persistence (copy from output buffer)
+            model->embedding.resize(static_cast<size_t>(n_obs) * static_cast<size_t>(embedding_dim));
+            std::memcpy(model->embedding.data(), embedding,
+                        static_cast<size_t>(n_obs) * static_cast<size_t>(embedding_dim) * sizeof(float));
 
             return UWOT_SUCCESS;
 
@@ -738,6 +625,8 @@ void compute_normalization(const std::vector<float>& data, int n_obs, int n_dim,
         UwotMetric metric, UwotModel* model,
         std::vector<int>& nn_indices, std::vector<double>& nn_distances,
         int force_exact_knn, uwot_progress_callback_v2 progress_callback, int autoHNSWParam) {
+        // Suppress unreferenced parameter warning (future functionality)
+        (void)autoHNSWParam;
 
         nn_indices.resize(static_cast<size_t>(n_obs) * static_cast<size_t>(n_neighbors));
         nn_distances.resize(static_cast<size_t>(n_obs) * static_cast<size_t>(n_neighbors));

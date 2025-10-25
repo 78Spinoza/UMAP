@@ -94,7 +94,7 @@ namespace distance_metrics {
     }
 
     // Data validation functions for specific metrics
-    bool validate_hamming_data(const float* data, int n_obs, int n_dim) {
+    void validate_hamming_data(const float* data, int n_obs, int n_dim) {
         int non_binary_count = 0;
         const int MAX_NON_BINARY_TO_CHECK = std::min(1000, n_obs); // Sample validation
         const int MAX_FEATURES_TO_CHECK = std::min(50, n_dim);     // Sample features
@@ -106,7 +106,7 @@ namespace distance_metrics {
                 if (!(std::abs(val) < 1e-6f || std::abs(val - 1.0f) < 1e-6f)) {
                     non_binary_count++;
                     if (non_binary_count > 10) { // Stop early if clearly not binary
-                        return false;
+                        throw std::runtime_error("Hamming distance requires binary data (0 or 1 values)");
                     }
                 }
             }
@@ -114,7 +114,9 @@ namespace distance_metrics {
 
         // Consider data binary if less than 5% non-binary values in sample
         float non_binary_ratio = static_cast<float>(non_binary_count) / (MAX_NON_BINARY_TO_CHECK * MAX_FEATURES_TO_CHECK);
-        return non_binary_ratio < 0.05f;
+        if (non_binary_ratio >= 0.05f) {
+            throw std::runtime_error("Hamming distance requires binary data - too many non-binary values detected");
+        }
     }
 
     bool validate_correlation_data(const float* data, int n_obs, int n_dim) {

@@ -209,10 +209,7 @@ namespace persistence_utils {
             endian_utils::write_value(file, model->min_dist);
             endian_utils::write_value(file, model->spread);
             endian_utils::write_value(file, static_cast<int>(model->metric));
-            endian_utils::write_value(file, model->a);
-            endian_utils::write_value(file, model->b);
 
-            
             // HNSW parameters (endian-safe)
             endian_utils::write_value(file, model->hnsw_M);
             endian_utils::write_value(file, model->hnsw_ef_construction);
@@ -343,6 +340,23 @@ namespace persistence_utils {
                 }
             }
 
+            // Save force_exact_knn flag and raw_data for exact k-NN mode
+            endian_utils::write_value(file, model->force_exact_knn);
+
+            // Save raw training data when force_exact_knn is enabled
+            bool has_raw_data = model->force_exact_knn && !model->raw_data.empty();
+            endian_utils::write_value(file, has_raw_data);
+
+            if (has_raw_data) {
+                size_t raw_data_size = model->raw_data.size();
+                endian_utils::write_value(file, raw_data_size);
+
+                // Write raw data (endian-safe)
+                for (size_t i = 0; i < raw_data_size; i++) {
+                    endian_utils::write_value(file, model->raw_data[i]);
+                }
+            }
+
             // Save DUAL HNSW indices directly to stream with CRC32 validation
             bool save_original_index = model->original_space_index != nullptr && !model->use_quantization;
             bool save_embedding_index = model->embedding_space_index != nullptr && !model->always_save_embedding_data;
@@ -389,16 +403,14 @@ namespace persistence_utils {
                         hnsw_utils::save_hnsw_to_stream_compressed(file, model->embedding_space_index.get());
                         
                     }
-                    catch (const std::exception& e) {
-                        std::cout << "[DEBUG] Embedding HNSW save exception: " << e.what() << std::endl;
+                    catch (...) {
                         throw;
                     }
 
                     std::streampos embedding_hnsw_end = file.tellp();
                 }
-                catch (const std::exception& e) {
+                catch (...) {
                     // Embedding HNSW save failed - this is critical for AI inference
-                    std::cout << "[DEBUG] Embedding space HNSW save exception: " << e.what() << std::endl;
                     size_t zero_size = 0;
                     endian_utils::write_value(file, zero_size);
                     send_warning_to_callback("Embedding space HNSW index save failed - AI inference will not work");
@@ -482,11 +494,6 @@ namespace persistence_utils {
             }
             model->metric = static_cast<UwotMetric>(metric_value);
 
-            if (!endian_utils::read_value(file, model->a) ||
-                !endian_utils::read_value(file, model->b)) {
-                throw std::runtime_error("Failed to read curve parameters");
-            }
-
             // Read HNSW parameters (endian-safe)
             if (!endian_utils::read_value(file, model->hnsw_M) ||
                 !endian_utils::read_value(file, model->hnsw_ef_construction) ||
@@ -513,6 +520,7 @@ namespace persistence_utils {
             if (!endian_utils::read_value(file, has_normalization)) {
                 throw std::runtime_error("Failed to read normalization flag");
             }
+            // CRITICAL FIX: Always ensure normalization vectors are properly initialized
             if (has_normalization) {
                 model->feature_means.resize(model->n_dim);
                 model->feature_stds.resize(model->n_dim);
@@ -535,26 +543,36 @@ namespace persistence_utils {
                     throw std::runtime_error("Failed to read normalization mode");
                 }
                 model->use_normalization = true;
+            } else {
+                // CRITICAL FIX: Initialize normalization vectors when not available in saved file
+                // This prevents AccessViolation during transform
+                model->feature_means.resize(model->n_dim);
+                model->feature_stds.resize(model->n_dim);
+
+                // Initialize to no normalization (identity transformation)
+                for (int i = 0; i < model->n_dim; i++) {
+                    model->feature_means[i] = 0.0f;
+                    model->feature_stds[i] = 1.0f;
+                }
+                model->normalization_mode = 0; // No normalization mode
+                model->use_normalization = false;
             }
 
-            
+
             // Read embedding data - handle optimized format for quantized models (endian-safe)
             size_t embedding_size;
             if (!endian_utils::read_value(file, embedding_size)) {
                 throw std::runtime_error("Failed to read embedding size");
             }
-            std::cout << "[DEBUG] Load: Read embedding_size=" << embedding_size << std::endl;
-
+            
             // Read optimization flag for quantized models
             bool save_embedding;
             if (!endian_utils::read_value(file, save_embedding)) {
                 throw std::runtime_error("Failed to read embedding save flag");
             }
-            std::cout << "[DEBUG] Load: Read save_embedding=" << save_embedding << std::endl;
-
+            
             model->embedding.resize(embedding_size);
-            std::cout << "[DEBUG] Load: Resized embedding array to size=" << model->embedding.size() << std::endl;
-
+            
             if (save_embedding && embedding_size > 0) {
                 // Full embedding data saved (non-quantized or legacy models)
                 uint32_t uncompressed_size, compressed_size;
@@ -700,6 +718,33 @@ namespace persistence_utils {
                 }
             }
 
+            // Read force_exact_knn flag and raw_data for exact k-NN mode
+            if (!endian_utils::read_value(file, model->force_exact_knn)) {
+                throw std::runtime_error("Failed to read force_exact_knn flag");
+            }
+
+            bool has_raw_data;
+            if (!endian_utils::read_value(file, has_raw_data)) {
+                throw std::runtime_error("Failed to read raw_data flag");
+            }
+
+            if (has_raw_data) {
+                size_t raw_data_size;
+                if (!endian_utils::read_value(file, raw_data_size)) {
+                    throw std::runtime_error("Failed to read raw_data size");
+                }
+
+                if (raw_data_size > 0) {
+                    model->raw_data.resize(raw_data_size);
+                    // Read raw data (endian-safe)
+                    for (size_t i = 0; i < raw_data_size; i++) {
+                        if (!endian_utils::read_value(file, model->raw_data[i])) {
+                            throw std::runtime_error("Failed to read raw_data");
+                        }
+                    }
+                }
+            }
+
             // Read DUAL HNSW indices (endian-safe)
             bool has_original_index, has_embedding_index;
             if (!endian_utils::read_value(file, has_original_index) ||
@@ -710,6 +755,11 @@ namespace persistence_utils {
             // Load original space HNSW index
             if (has_original_index) {
                 try {
+                    // Initialize original space factory (critical - this was missing!)
+                    if (!model->original_space_factory) {
+                        model->original_space_factory = std::make_unique<hnsw_utils::SpaceFactory>();
+                    }
+
                     // Initialize original space factory with correct metric
                     if (!model->original_space_factory->create_space(model->metric, model->n_dim)) {
                         throw std::runtime_error("Failed to create original space HNSW space");
@@ -776,7 +826,10 @@ namespace persistence_utils {
             // Load embedding space HNSW index (critical for AI inference)
             if (has_embedding_index) {
                 try {
-                    // Initialize embedding space factory (always L2 for embeddings)
+                    // Initialize embedding space factory (always L2 for embeddings) - critical fix!
+                    if (!model->embedding_space_factory) {
+                        model->embedding_space_factory = std::make_unique<hnsw_utils::SpaceFactory>();
+                    }
                     if (!model->embedding_space_factory->create_space(UWOT_METRIC_EUCLIDEAN, model->embedding_dim)) {
                         throw std::runtime_error("Failed to create embedding space HNSW space");
                     }
@@ -823,7 +876,10 @@ namespace persistence_utils {
                 // NEW: Rebuild embedding HNSW index from saved embeddings when always_save_embedding_data is true
                 send_warning_to_callback("Rebuilding embedding space HNSW index from saved embeddings (always_save_embedding_data mode)");
                 try {
-                    // Initialize embedding space factory (always L2 for embeddings)
+                    // Initialize embedding space factory (always L2 for embeddings) - critical fix!
+                    if (!model->embedding_space_factory) {
+                        model->embedding_space_factory = std::make_unique<hnsw_utils::SpaceFactory>();
+                    }
                     if (!model->embedding_space_factory->create_space(UWOT_METRIC_EUCLIDEAN, model->embedding_dim)) {
                         throw std::runtime_error("Failed to create embedding space HNSW space");
                     }
@@ -858,7 +914,11 @@ namespace persistence_utils {
                     // WARNING: Reconstructing original space HNSW from lossy quantized data
                     send_warning_to_callback("Reconstructing original space HNSW from quantized data - accuracy may be reduced");
                     try {
-                        // Initialize original space factory
+                        // Initialize original space factory (critical - this was missing!)
+                        if (!model->original_space_factory) {
+                            model->original_space_factory = std::make_unique<hnsw_utils::SpaceFactory>();
+                        }
+
                         if (!model->original_space_factory->create_space(model->metric, model->n_dim)) {
                             throw std::runtime_error("Failed to create original space HNSW for reconstruction");
                         }
@@ -904,7 +964,10 @@ namespace persistence_utils {
                 if (!model->embedding.empty()) {
                     send_warning_to_callback("Rebuilding embedding space HNSW from saved embeddings");
                     try {
-                        // Initialize embedding space factory (always L2)
+                        // Initialize embedding space factory (always L2) - critical fix!
+                        if (!model->embedding_space_factory) {
+                            model->embedding_space_factory = std::make_unique<hnsw_utils::SpaceFactory>();
+                        }
                         if (!model->embedding_space_factory->create_space(UWOT_METRIC_EUCLIDEAN, model->embedding_dim)) {
                             throw std::runtime_error("Failed to create embedding space HNSW for reconstruction");
                         }

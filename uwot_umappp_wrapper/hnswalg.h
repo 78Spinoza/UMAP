@@ -9,6 +9,7 @@
 #include <unordered_set>
 #include <list>
 #include <memory>
+#include <limits>
 
 namespace hnswlib {
 typedef unsigned int tableint;
@@ -1309,7 +1310,11 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 throw std::runtime_error("The number of elements exceeds the specified limit");
             }
 
-            cur_c = cur_element_count;
+            // Fix C4244 warning: Explicit cast from size_t to tableint with bounds check
+            if (cur_element_count > std::numeric_limits<tableint>::max()) {
+                throw std::runtime_error("Element count exceeds tableint maximum");
+            }
+            cur_c = static_cast<tableint>(cur_element_count);
             cur_element_count++;
             label_lookup_[label] = cur_c;
         }

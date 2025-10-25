@@ -12,6 +12,7 @@
 #include <numeric>
 #include <cstring>
 #include <iostream>
+#include <limits>
 
 // Note: g_v2_callback is already declared in uwot_progress_utils.h
 
@@ -46,9 +47,23 @@ extern "C" {
         int random_seed,
         int autoHNSWParam
     ) {
+        // Suppress unreferenced parameter warning (future functionality)
+        (void)autoHNSWParam;
+
         if (!model || !data || !embedding || n_obs <= 0 || n_dim <= 0 || embedding_dim <= 0) {
             return UWOT_ERROR_INVALID_PARAMS;
         }
+
+        // Overflow checks for n_obs and n_dim
+        if (n_obs > INT_MAX || n_dim > INT_MAX) {
+            return UWOT_ERROR_INVALID_PARAMS;
+        }
+
+        // Check for overflow in n_obs * n_dim calculation
+        if (n_dim > 0 && n_obs > SIZE_MAX / static_cast<size_t>(n_dim)) {
+            return UWOT_ERROR_MEMORY;
+        }
+
         // Cast to int for internal processing (still supports up to 2.1B points)
         int n_obs_int = static_cast<int>(n_obs);
         int n_dim_int = static_cast<int>(n_dim);
@@ -74,6 +89,15 @@ extern "C" {
         if (!model || !new_data || !embedding || n_new_obs <= 0 || n_dim <= 0) {
             return UWOT_ERROR_INVALID_PARAMS;
         }
+
+        if (!model->is_fitted) {
+            return UWOT_ERROR_INVALID_PARAMS;
+        }
+
+        // Overflow check for n_new_obs * n_dim
+        if (n_dim > 0 && static_cast<size_t>(n_new_obs) > SIZE_MAX / static_cast<size_t>(n_dim)) {
+            return UWOT_ERROR_MEMORY;
+        }
         return transform_utils::uwot_transform(model, new_data, n_new_obs, n_dim, embedding);
     }
 
@@ -93,6 +117,12 @@ extern "C" {
         if (!model || !new_data || !embedding || n_new_obs <= 0 || n_dim <= 0) {
             return UWOT_ERROR_INVALID_PARAMS;
         }
+
+        // Overflow check for n_new_obs * n_dim
+        if (n_dim > 0 && static_cast<size_t>(n_new_obs) > SIZE_MAX / static_cast<size_t>(n_dim)) {
+            return UWOT_ERROR_MEMORY;
+        }
+
         return transform_utils::uwot_transform_detailed(model, new_data, n_new_obs, n_dim, embedding,
             nn_indices, nn_distances, confidence_score, outlier_level, percentile_rank, z_score);
     }
@@ -112,8 +142,22 @@ extern "C" {
             return UWOT_ERROR_INVALID_PARAMS;
         }
 
-        if (n_vertices) *n_vertices = model->n_vertices;
-        if (n_dim) *n_dim = model->n_dim;
+        if (n_vertices) {
+            // Fix C4244: Explicit cast with bounds check
+            if (model->n_vertices > std::numeric_limits<int>::max()) {
+                *n_vertices = std::numeric_limits<int>::max();  // Clamp to max int
+            } else {
+                *n_vertices = static_cast<int>(model->n_vertices);
+            }
+        }
+        if (n_dim) {
+            // Fix C4244: Explicit cast with bounds check
+            if (model->n_dim > std::numeric_limits<int>::max()) {
+                *n_dim = std::numeric_limits<int>::max();  // Clamp to max int
+            } else {
+                *n_dim = static_cast<int>(model->n_dim);
+            }
+        }
         if (embedding_dim) *embedding_dim = model->embedding_dim;
         if (n_neighbors) *n_neighbors = model->n_neighbors;
         if (min_dist) *min_dist = model->min_dist;

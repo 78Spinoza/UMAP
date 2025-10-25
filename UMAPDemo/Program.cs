@@ -269,11 +269,11 @@ namespace UMAPDemo
 
 
         /// <summary>
-        /// Runs a demo on a 10K mammoth dataset using exact k-NN (brute force).
+        /// Runs a demo on a 10K mammoth dataset using HNSW approximation.
         /// </summary>
         private static void Run10kMammothDemo(double[,] data, int[] labels, string[] uniqueParts)
         {
-            Console.WriteLine("🦣 Running 10K Mammoth Demo (EXACT k-NN)...");
+            Console.WriteLine("🦣 Running 10K Mammoth Demo (HNSW Approximation)...");
             var umap = new UMapModel();
             var stopwatch = Stopwatch.StartNew();
             // Convert double[,] to float[,] for UMAP API

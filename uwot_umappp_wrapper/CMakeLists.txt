@@ -7,6 +7,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Include FetchContent module for minimal dependencies
 include(FetchContent)
 
+# Suppress all Eigen-related warnings and C++11 issues before fetching
+set(EIGEN_BUILD_TESTING OFF CACHE BOOL "Don't build Eigen tests" FORCE)
+set(EIGEN_BUILD_DOC OFF CACHE BOOL "Don't build Eigen documentation" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "Don't build any tests" FORCE)
+set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON CACHE BOOL "Suppress developer warnings" FORCE)
+
 # Fetch umappp dependencies
 # Eigen is required by irlba and umappp spectral initialization
 FetchContent_Declare(
@@ -61,9 +67,7 @@ else()
     message(WARNING "OpenMP not found - umappp will run in single-threaded mode")
 endif()
 
-# Disable Eigen testing and documentation to avoid C++11 issues
-set(EIGEN_BUILD_TESTING OFF CACHE BOOL "Don't build tests")
-set(EIGEN_BUILD_DOC OFF CACHE BOOL "Don't build documentation")
+# Additional Eigen configuration (moved to top before FetchContent)
 
 # Enable parallel optimization for better performance
 # (umappp will use OpenMP when available)
@@ -118,9 +122,26 @@ if(OpenMP_CXX_FOUND)
     target_link_libraries(uwot_umappp PRIVATE OpenMP::OpenMP_CXX)
 endif()
 
-# Compiler-specific optimizations
+# Compiler-specific optimizations and warning suppression
 if(MSVC)
+    # High warning level for our code, but suppress unrelated warnings
     target_compile_options(uwot_umappp PRIVATE /W4 /O2)
+    # Suppress external library warnings for clean build
+    target_compile_options(uwot_umappp PRIVATE /wd4244)  # conversion potential loss (already fixed in hnswalg.h)
+    target_compile_options(uwot_umappp PRIVATE /wd4267)  # size_t to int conversion
+    target_compile_options(uwot_umappp PRIVATE /wd4018)  # signed/unsigned mismatch
+    target_compile_options(uwot_umappp PRIVATE /wd4996)  # deprecated functions
+    target_compile_options(uwot_umappp PRIVATE /wd4100)  # unreferenced parameters (external libs)
+    target_compile_options(uwot_umappp PRIVATE /wd4127)  # conditional expression is constant
+    target_compile_options(uwot_umappp PRIVATE /wd4457)  # variable hiding
+    target_compile_options(uwot_umappp PRIVATE /wd4245)  # signed/unsigned mismatch
+    target_compile_options(uwot_umappp PRIVATE /wd4505)  # unreferenced function
+    target_compile_options(uwot_umappp PRIVATE /wd4714)  # optimization related
 else()
     target_compile_options(uwot_umappp PRIVATE -Wall -Wextra -O3)
+    # Suppress common external library warnings
+    target_compile_options(uwot_umappp PRIVATE -Wno-unused-parameter)
+    target_compile_options(uwot_umappp PRIVATE -Wno-deprecated-declarations)
+    target_compile_options(uwot_umappp PRIVATE -Wno-sign-compare)
+    target_compile_options(uwot_umappp PRIVATE -Wno-unused-function)
 endif()

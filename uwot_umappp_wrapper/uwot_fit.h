@@ -22,9 +22,6 @@ namespace fit_utils {
     // Import distance metrics from dedicated module
     using namespace distance_metrics;
 
-    // Calculate UMAP parameters from spread and min_dist
-    void calculate_ab_from_spread_and_min_dist(UwotModel* model);
-
     // Calculate epochs per sample for intelligent edge scheduling
     std::vector<float> make_epochs_per_sample(const std::vector<double>& weights, int n_epochs);
 
