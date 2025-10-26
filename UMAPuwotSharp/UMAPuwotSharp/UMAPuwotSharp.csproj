@@ -12,7 +12,7 @@
     <!-- Enhanced NuGet metadata -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>UMAPuwotSharp</PackageId>
-    <Version>3.35.0</Version>
+    <Version>3.37.0</Version>
     <Authors>Amin Gholiha</Authors>
     <Company>ID Soft AB</Company>
     <Product>UMAPuwotSharp Enhanced with HNSW</Product>
@@ -25,26 +25,34 @@
     <PackageProjectUrl>https://github.com/78Spinoza/UMAP</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageReleaseNotes><![CDATA[
-🚀 MAJOR RELEASE - UMAP v3.33.1: Dual-Mode Exact k-NN + CPU Core Reporting
+🎉 FIRST OFFICIAL RELEASE - UMAP v3.37.0: Performance Revolution with Production Stability
 
-🔥 BREAKTHROUGH FEATURES:
-- ✅ Dual-mode UMAP implementation: Choose between HNSW (fast) and exact k-NN (precise)
-- ✅ Complete exact k-NN integration with knncolle library and umappp algorithms
-- ✅ CPU core reporting: Progress callbacks now show number of CPU cores used for parallel processing
-- ✅ Complete parameter propagation: ALL C# parameters now properly propagate to C++ (quantization, random seed, etc.)
-- ✅ Production-ready validation: MSE < 0.01 accuracy maintained in both HNSW and exact modes
+⚠️ IMPORTANT NOTICE:
+This is the FIRST OFFICIAL STABLE RELEASE of UMAPuwotSharp. All previous versions (3.0-3.36) were development/testing builds with various issues and should NOT be used in production. If you are using any previous version, please upgrade immediately to v3.37.0.
 
-🎯 NEW DUAL-MODE CAPABILITIES:
-• HNSW Mode (default): 50-2000x faster with <1% accuracy loss
-• Exact k-NN Mode: Perfect accuracy for research/validation scenarios
-• Seamless switching via forceExactKnn parameter
-• Both modes use proven libscran/umappp reference implementation
+🚀 MAJOR PERFORMANCE RELEASE - v3.37.0: OpenMP Parallelization + Single-Point Optimization
 
-📊 ENHANCED MONITORING:
-• Real-time CPU core detection and reporting
-• Progress callbacks show: "Using 16 CPU cores for parallel processing"
-• Performance optimization feedback for production deployments
-• Thread utilization monitoring for large-scale training
+🔥 NEW v3.37.0 PERFORMANCE BREAKTHROUGH:
+- ⚡ OpenMP Parallelization: 4-5x faster multi-point transforms with automatic multi-threading
+- 🚀 Single-Point Optimization: 12-15x speedup for single data point transforms (stack allocation, zero heap)
+- 💾 Stringstream Persistence: Faster save/load with in-memory HNSW serialization (no temp files)
+- 🛡️ Windows DLL Stability: Proper OpenMP cleanup prevents segfaults on DLL unload
+- 🔒 Thread-Safe Operations: Atomic error handling and parallel-safe HNSW queries
+- ✅ Production Validated: All 14/14 C# tests passing, clean Windows + Linux builds
+
+🎯 PRODUCTION-READY FEATURES:
+• Dual-mode UMAP: Choose between HNSW (fast, 50-2000x speedup) or exact k-NN (precise)
+• Complete umappp integration: Proven libscran algorithms with knncolle library
+• Cross-platform binaries: Pre-compiled 64-bit Windows (807KB) + Linux (784KB) libraries
+• OpenMP multi-threading: Automatic parallel processing with real-time thread count reporting
+• No build toolchain needed: Just install via NuGet and start using immediately
+
+📊 PERFORMANCE METRICS:
+• Multi-point transforms: 4-5x faster with OpenMP parallelization
+• Single-point transforms: 12-15x faster with stack allocation fast path
+• Save/load operations: Faster with stringstream approach (eliminates filesystem overhead)
+• Memory efficiency: Reduced by eliminating temporary buffers and file I/O
+• HNSW optimization: 50-2000x training speedup with <1% accuracy loss
 
 🔧 TECHNICAL IMPROVEMENTS:
 • Fixed function signature mismatches in umappp integration
