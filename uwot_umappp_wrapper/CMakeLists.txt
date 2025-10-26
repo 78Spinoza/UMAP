@@ -124,7 +124,7 @@ endif()
 # Compiler-specific optimizations and warning suppression
 if(MSVC)
     # High warning level for our code, but suppress unrelated warnings
-    target_compile_options(uwot_umappp PRIVATE /W4 /O2)
+    target_compile_options(uwot_umappp PRIVATE /W4 /O2 /fp:fast)
     # Suppress external library warnings for clean build
     target_compile_options(uwot_umappp PRIVATE /wd4244)  # conversion potential loss (already fixed in hnswalg.h)
     target_compile_options(uwot_umappp PRIVATE /wd4267)  # size_t to int conversion
@@ -137,7 +137,8 @@ if(MSVC)
     target_compile_options(uwot_umappp PRIVATE /wd4505)  # unreferenced function
     target_compile_options(uwot_umappp PRIVATE /wd4714)  # optimization related
 else()
-    target_compile_options(uwot_umappp PRIVATE -Wall -Wextra -O3)
+    # Maximum performance optimizations for GCC/Clang
+    target_compile_options(uwot_umappp PRIVATE -Wall -Wextra -O3 -march=native -ffast-math)
     # Suppress common external library warnings
     target_compile_options(uwot_umappp PRIVATE -Wno-unused-parameter)
     target_compile_options(uwot_umappp PRIVATE -Wno-deprecated-declarations)

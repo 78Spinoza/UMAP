@@ -30,7 +30,7 @@ extern "C" {
 #define UWOT_ERROR_CRC_MISMATCH -7
 
 // Version information
-#define UWOT_WRAPPER_VERSION_STRING "3.36.0"
+#define UWOT_WRAPPER_VERSION_STRING "3.37.0"
 
 // Distance metrics
     typedef enum {
@@ -160,6 +160,9 @@ extern "C" {
     // Embedding data preservation options
     UWOT_API void uwot_set_always_save_embedding_data(UwotModel* model, bool always_save);
     UWOT_API bool uwot_get_always_save_embedding_data(UwotModel* model);
+
+    // OpenMP cleanup for Windows DLL to prevent segfault on unload
+    UWOT_API void uwot_cleanup();
 
     // Enhanced model information with dual HNSW indices
     UWOT_API int uwot_get_model_info_v2(

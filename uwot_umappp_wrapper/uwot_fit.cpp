@@ -483,8 +483,8 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
                     for (int i = 0; i < n_obs; i++) {
                         original_hnsw->addPoint(const_cast<float*>(data_for_index + i * n_dim), static_cast<hnswlib::labeltype>(i));
 
-                        // Report progress more frequently for large datasets (>10k)
-                        int progress_interval = (n_obs > 10000) ? (n_obs / 100) : (n_obs / 20); // 1% for >10k, 5% otherwise
+                        // Report progress more frequently for large datasets (>=10k)
+                        int progress_interval = (n_obs >= 10000) ? (n_obs / 100) : (n_obs / 20); // 1% for >=10k, 5% otherwise
                         if (wrapped_callback && (i % progress_interval == 0 || i == n_obs - 1)) {
                             float sub_progress = 96.0f + (1.0f * i / n_obs);
                             wrapped_callback("Saving HNSW index", i, n_obs, sub_progress, "Indexing points for transform");
@@ -910,8 +910,8 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
                     }
                 }
 
-                // Progress reporting more frequently for large datasets (>10k)
-                int progress_interval = (n_obs > 10000) ? (n_obs / 50) : (n_obs / 10); // 2% for >10k, 10% otherwise
+                // Progress reporting more frequently for large datasets (>=10k)
+                int progress_interval = (n_obs >= 10000) ? (n_obs / 50) : (n_obs / 10); // 2% for >=10k, 10% otherwise
                 if (progress_callback && i % (progress_interval + 1) == 0) {
                     float percent = static_cast<float>(i) * 100.0f / static_cast<float>(n_obs);
                     auto elapsed = std::chrono::steady_clock::now() - start_time;
@@ -987,8 +987,8 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
                     nn_distances[static_cast<size_t>(i) * static_cast<size_t>(n_neighbors) + static_cast<size_t>(k)] = distances[static_cast<size_t>(k)].first;
                 }
 
-                // Progress reporting more frequently for large datasets (>10k)
-                int progress_interval = (n_obs > 10000) ? (n_obs / 50) : (n_obs / 20); // 2% for >10k, 5% otherwise
+                // Progress reporting more frequently for large datasets (>=10k)
+                int progress_interval = (n_obs >= 10000) ? (n_obs / 50) : (n_obs / 20); // 2% for >=10k, 5% otherwise
                 if (progress_callback && i % (progress_interval + 1) == 0) {
                     float percent = static_cast<float>(i) * 100.0f / static_cast<float>(n_obs);
                     auto elapsed = std::chrono::steady_clock::now() - start_time;
@@ -1034,8 +1034,8 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
                 // Apply smooth_knn to convert raw distances to fuzzy weights
                 apply_smooth_knn_to_point(indices_ptr, distances_float.data(), n_neighbors, weights_ptr);
 
-                // Progress reporting for smooth_knn processing (more frequent for large datasets >10k)
-                int progress_interval = (n_obs > 10000) ? (n_obs / 100) : (n_obs / 20); // 1% for >10k, 5% otherwise
+                // Progress reporting for smooth_knn processing (more frequent for large datasets >=10k)
+                int progress_interval = (n_obs >= 10000) ? (n_obs / 100) : (n_obs / 20); // 1% for >=10k, 5% otherwise
                 if (progress_callback && i % (progress_interval + 1) == 0) {
                     float percent = static_cast<float>(i) * 100.0f / static_cast<float>(n_obs);
                     char message[256];

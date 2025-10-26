@@ -5,6 +5,7 @@
 #include <vector>
 #include <random>
 #include <chrono>
+#include <sstream>
 
 namespace persistence_utils {
 
@@ -49,51 +50,52 @@ namespace persistence_utils {
 
 
     void save_hnsw_to_stream_compressed(std::ostream& output, hnswlib::HierarchicalNSW<float>* hnsw_index) {
-        const std::string temp_filename = hnsw_utils::hnsw_stream_utils::generate_unique_temp_filename("hnsw_compressed");
+        if (!hnsw_index) {
+            throw std::runtime_error("HNSW index is null");
+        }
 
         try {
-            // Save HNSW index to temporary file
-            hnsw_index->saveIndex(temp_filename);
+            // ✅ STRINGSTREAM APPROACH (PacMap pattern) - No temp files!
+            // Save HNSW index to stringstream to get uncompressed data in memory
+            std::stringstream hnsw_data_stream;
+            hnsw_index->saveIndex(hnsw_data_stream);
 
-            // Read the temporary file
-            std::ifstream temp_file(temp_filename, std::ios::binary | std::ios::ate);
-            if (!temp_file.is_open()) {
-                throw std::runtime_error("Failed to open temporary HNSW file for compression");
-            }
-
-            const std::streamsize file_size = temp_file.tellg();
-            temp_file.seekg(0, std::ios::beg);
-
-            std::vector<char> uncompressed_data(file_size);
-            if (!temp_file.read(uncompressed_data.data(), file_size)) {
-                throw std::runtime_error("Failed to read HNSW temporary file");
-            }
-            temp_file.close();
+            // Get the HNSW data as string
+            std::string hnsw_data = hnsw_data_stream.str();
+            uint32_t uncompressed_size = static_cast<uint32_t>(hnsw_data.size());
 
             // Compress with LZ4
-            const int max_compressed_size = LZ4_compressBound(static_cast<int>(file_size));
+            int max_compressed_size = LZ4_compressBound(static_cast<int>(uncompressed_size));
             std::vector<char> compressed_data(max_compressed_size);
 
-            const int compressed_size = LZ4_compress_default(
-                uncompressed_data.data(), compressed_data.data(),
-                static_cast<int>(file_size), max_compressed_size);
+            int compressed_size = LZ4_compress_default(
+                hnsw_data.data(), compressed_data.data(),
+                static_cast<int>(uncompressed_size), max_compressed_size);
 
             if (compressed_size <= 0) {
                 throw std::runtime_error("LZ4 compression failed for HNSW data");
             }
 
-            // Write sizes and compressed data
-            const uint32_t original_size = static_cast<uint32_t>(file_size);
-            const uint32_t comp_size = static_cast<uint32_t>(compressed_size);
+            uint32_t final_compressed_size = static_cast<uint32_t>(compressed_size);
 
-            endian_utils::write_value(output, original_size);
-            endian_utils::write_value(output, comp_size);
-            output.write(compressed_data.data(), compressed_size);
+            // Write headers to output stream using endian-safe functions
+            endian_utils::write_value(output, uncompressed_size);
+            endian_utils::write_value(output, final_compressed_size);
 
-            temp_utils::safe_remove_file(temp_filename);
+            // Write compressed data to output stream
+            output.write(compressed_data.data(), final_compressed_size);
+
+            // Check if write was successful
+            if (!output.good()) {
+                throw std::runtime_error("Failed to write compressed HNSW data to stream");
+            }
+
+            // Flush the stream to ensure data is written
+            output.flush();
         }
-        catch (...) {
-            temp_utils::safe_remove_file(temp_filename);
+        catch (const std::exception& e) {
+            std::string error_msg = std::string("HNSW Save (stringstream): ") + e.what();
+            send_error_to_callback(error_msg.c_str());
             throw;
         }
     }
@@ -101,59 +103,64 @@ namespace persistence_utils {
 
     void load_hnsw_from_stream_compressed(std::istream& input, hnswlib::HierarchicalNSW<float>* hnsw_index,
         hnswlib::SpaceInterface<float>* space) {
-        std::string temp_filename;
-
         try {
-            // Read compression headers
-            uint32_t original_size = 0, compressed_size = 0;
-            if (!endian_utils::read_value(input, original_size) ||
+            // Check stream state first
+            if (!input.good()) {
+                throw std::runtime_error("Input stream is in bad state before reading");
+            }
+
+            // Read compression headers using endian-safe functions (must match save format)
+            uint32_t uncompressed_size = 0, compressed_size = 0;
+            if (!endian_utils::read_value(input, uncompressed_size) ||
                 !endian_utils::read_value(input, compressed_size)) {
-                throw std::runtime_error("Failed to read LZ4 compression headers");
+                throw std::runtime_error("Failed to read HNSW compression headers - stream error or EOF");
             }
 
-            // Security validation
-            constexpr uint32_t MAX_DECOMPRESSED_SIZE = 100 * 1024 * 1024; // 100MB
-            constexpr uint32_t MAX_COMPRESSED_SIZE = 80 * 1024 * 1024;    // 80MB
-
-            if (original_size > MAX_DECOMPRESSED_SIZE || compressed_size > MAX_COMPRESSED_SIZE ||
-                original_size == 0 || compressed_size == 0) {
-                throw std::runtime_error("Invalid HNSW compressed data size");
+            // Validate sizes - zero is allowed for empty HNSW data
+            if (uncompressed_size == 0 && compressed_size == 0) {
+                return; // Successfully loaded empty HNSW
             }
 
-            // Read compressed data
+            // Security validation (following PacMap pattern)
+            const uint32_t MAX_DECOMPRESSED_SIZE = 100 * 1024 * 1024; // 100MB limit
+            const uint32_t MAX_COMPRESSED_SIZE = 80 * 1024 * 1024;    // 80MB limit
+
+            if (uncompressed_size > MAX_DECOMPRESSED_SIZE) {
+                throw std::runtime_error("HNSW uncompressed size too large (potential corruption)");
+            }
+            if (compressed_size > MAX_COMPRESSED_SIZE) {
+                throw std::runtime_error("HNSW compressed size too large (potential corruption)");
+            }
+
+            // Read compressed data into buffer
             std::vector<char> compressed_data(compressed_size);
             input.read(compressed_data.data(), compressed_size);
-            if (!input.good() || input.gcount() != compressed_size) {
-                throw std::runtime_error("Failed to read HNSW compressed data");
+
+            if (!input.good() || input.gcount() != static_cast<std::streamsize>(compressed_size)) {
+                throw std::runtime_error("Failed to read HNSW compressed data - unexpected EOF");
             }
 
-            // Decompress
-            std::vector<char> decompressed_data(original_size);
-            const int decompressed_size = LZ4_decompress_safe(
+            // Decompress with LZ4
+            std::vector<char> decompressed_data(uncompressed_size);
+            int decompressed_result = LZ4_decompress_safe(
                 compressed_data.data(), decompressed_data.data(),
-                static_cast<int>(compressed_size), static_cast<int>(original_size));
+                static_cast<int>(compressed_size), static_cast<int>(uncompressed_size));
 
-            if (decompressed_size <= 0 || decompressed_size != static_cast<int>(original_size)) {
+            if (decompressed_result != static_cast<int>(uncompressed_size)) {
                 throw std::runtime_error("LZ4 decompression failed for HNSW data");
             }
 
-            // Write to temporary file and load
-            temp_filename = hnsw_utils::hnsw_stream_utils::generate_unique_temp_filename("hnsw_decomp");
-            {
-                std::ofstream temp_file(temp_filename, std::ios::binary);
-                if (!temp_file.is_open()) {
-                    throw std::runtime_error("Failed to create temporary file for HNSW decompression");
-                }
-                temp_file.write(decompressed_data.data(), original_size);
-            }
+            // ✅ STRINGSTREAM APPROACH (PacMap pattern) - No temp files!
+            // Create stringstream from decompressed data for loading
+            std::stringstream data_stream;
+            data_stream.write(decompressed_data.data(), uncompressed_size);
 
-            hnsw_index->loadIndex(temp_filename, space, hnsw_index->getCurrentElementCount());
-            temp_utils::safe_remove_file(temp_filename);
-        }
-        catch (...) {
-            if (!temp_filename.empty()) {
-                temp_utils::safe_remove_file(temp_filename);
-            }
+            // Load HNSW from decompressed data stream
+            hnsw_index->loadIndex(data_stream, space);
+
+        } catch (const std::exception& e) {
+            std::string error_msg = std::string("HNSW Load (stringstream): ") + e.what();
+            send_error_to_callback(error_msg.c_str());
             throw;
         }
     }

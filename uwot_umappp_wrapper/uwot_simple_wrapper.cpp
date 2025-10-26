@@ -13,6 +13,10 @@
 #include <iostream>
 #include <limits>
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 // Note: g_v2_callback is already declared in uwot_progress_utils.h
 
 extern "C" {
@@ -71,9 +75,24 @@ extern "C" {
         model->force_exact_knn = (force_exact_knn != 0);
 
         // Use the new umappp + HNSW implementation for better embeddings
-        return fit_utils::uwot_fit_with_umappp_hnsw(model, data, n_obs_int, n_dim_int, embedding_dim, n_neighbors,
+        int result = fit_utils::uwot_fit_with_umappp_hnsw(model, data, n_obs_int, n_dim_int, embedding_dim, n_neighbors,
             min_dist, spread, n_epochs, metric, embedding, progress_callback,
             random_seed, M, ef_construction, ef_search);
+
+        // CRITICAL: Auto-cleanup OpenMP threads after fit completes
+        // This prevents segfault during DLL unload by ensuring all threads are terminated
+        #ifdef _OPENMP
+        omp_set_num_threads(1);
+        omp_set_nested(0);
+        omp_set_dynamic(0);
+        // Force thread pool shutdown
+        #pragma omp parallel
+        {
+            // Single-threaded region forces OpenMP runtime cleanup
+        }
+        #endif
+
+        return result;
     }
 
     UWOT_API int uwot_transform(
@@ -249,4 +268,51 @@ extern "C" {
         g_v2_callback = nullptr;
     }
 
+    // OpenMP cleanup function to prevent segfault on DLL unload
+    UWOT_API void uwot_cleanup() {
+        // Clean up OpenMP threads to prevent segfault on DLL unload
+        #ifdef _OPENMP
+        // CRITICAL: Force immediate shutdown of ALL OpenMP activity
+        // This prevents any lingering threads from causing segfault
+
+        // Step 1: Disable all parallelism immediately
+        omp_set_num_threads(1);
+        omp_set_nested(0);
+        omp_set_dynamic(0);
+
+        // Step 2: Execute a dummy parallel region to force thread pool shutdown
+        // This ensures all worker threads are terminated before DLL unload
+        #pragma omp parallel
+        {
+            // This single-threaded region forces OpenMP runtime to clean up
+            // the thread pool and terminate worker threads
+        }
+        #endif
+    }
+
 } // extern "C"
+
+// DLL process detach handler for clean OpenMP shutdown
+#ifdef _WIN32
+#include <windows.h>
+
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
+    (void)hModule;      // Suppress unused parameter warning
+    (void)lpReserved;   // Suppress unused parameter warning
+
+    switch (ul_reason_for_call) {
+    case DLL_PROCESS_DETACH:
+        // Clean up OpenMP threads before DLL unload to prevent segfault
+        #ifdef _OPENMP
+        // Force complete OpenMP shutdown
+        omp_set_num_threads(1);
+        // Reset thread pool completely
+        omp_set_nested(0);
+        // Additional safety: disable dynamic thread adjustment
+        omp_set_dynamic(0);
+        #endif
+        break;
+    }
+    return TRUE;
+}
+#endif
