@@ -166,9 +166,9 @@ namespace UMAPDemo
 
                 // Create 2D embedding using helper function and save model + timing
                 var (umap, fitTime, epochsUsed) = CreateMnistEmbeddingWithModel(doubleData, labels,
-                    nNeighbors: adaptiveNeighbors,
-                    minDist: adaptiveMinDist,
-                    spread: 1.0f,
+                    nNeighbors: 40,           // Updated to 40 as requested
+                    minDist: 0.1f,            // Updated to 0.1 as requested
+                    spread: 2.0f,             // Updated to 2.0 as requested
                     name: "mnist_2d_embedding", folderName: "", directKNN: false);
 
                 Console.WriteLine();

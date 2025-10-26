@@ -432,13 +432,13 @@ namespace UMAPDemo
                 data: floatData2,
                 progressCallback: UnifiedProgressCallback,
                 embeddingDimension: 2,
-                nNeighbors: 60,        // Optimal for large datasets
-                minDist: 0.35f,        // Updated to 0.35 as requested
-                spread: 1.0f,
+                nNeighbors: 120,       // Updated to 120 for detailed mammoth structure
+                minDist: 0.4f,         // Updated to 0.4 as requested
+                spread: 2.0f,          // Updated to 2.0 as requested
                 nEpochs: 300,
                 metric: DistanceMetric.Euclidean,
                 forceExactKnn: false,
-                autoHNSWParam: false,
+                autoHNSWParam: false,   // Using false to prevent automatic override
                 randomSeed: 42
             );
 
@@ -475,14 +475,19 @@ namespace UMAPDemo
             Console.WriteLine("   Creating 2D visualizations of UMAP embedding...");
 
             var sampleCount = doubleEmbedding2.GetLength(0);
-            var title2D = $"Hairy Mammoth {sampleCount:N0} Points - UMAP 2D Embedding (Labeled)\n" + BuildVisualizationTitle(umap);
+            // Create parameter info with execution time
+            var paramInfo = CreateFitParamInfo(umap, stopwatch.Elapsed.TotalSeconds, "Hairy_Mammoth_100K");
+            paramInfo["dataset"] = "Hairy Mammoth 100K";
+            paramInfo["embedding_quality"] = "Anatomically optimized";
+
             var outputPath2D = Path.Combine(resultsDir, $"hairy_mammoth_{sampleCount}_umap_2d.png");
             var outputPath2D_BW = Path.Combine(resultsDir, $"hairy_mammoth_{sampleCount}_umap_2d_bw.png");
 
             // Create colored version with anatomical labels and hyperparameters
             try
             {
-                Visualizer.PlotMammothUMAP(doubleEmbedding2, labels2, title2D, outputPath2D, uniqueParts);
+                var title2D = $"Hairy Mammoth {sampleCount:N0} Points - UMAP 2D Embedding (Labeled)\n" + BuildVisualizationTitle(umap, "Hairy Mammoth UMAP 2D Embedding");
+                Visualizer.PlotMammothUMAP(doubleEmbedding2, labels2, title2D, outputPath2D, paramInfo, autoFitAxes: true, partNames: uniqueParts);
             }
             catch (Exception ex)
             {
@@ -491,7 +496,7 @@ namespace UMAPDemo
             }
 
             // Create true black and white version with hyperparameters (no labels)
-            var titleBW = $"Hairy Mammoth {sampleCount:N0} Points - UMAP 2D Embedding (Black & White)\n" + BuildVisualizationTitle(umap);
+            var titleBW = $"Hairy Mammoth {sampleCount:N0} Points - UMAP 2D Embedding (Black & White)\n" + BuildVisualizationTitle(umap, "Hairy Mammoth UMAP 2D Embedding (Black & White)");
             Visualizer.PlotSimpleUMAP(doubleEmbedding2, titleBW, outputPath2D_BW, null);
 
             Console.WriteLine($"   ✅ UMAP 2D labeled visualization created: {Path.GetFileName(outputPath2D)}");

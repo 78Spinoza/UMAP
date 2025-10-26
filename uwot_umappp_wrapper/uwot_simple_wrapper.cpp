@@ -13,6 +13,7 @@
 #include <climits>
 #include <iostream>
 #include <limits>
+#include <thread>
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -52,6 +53,14 @@ extern "C" {
     ) {
         // Suppress unreferenced parameter warning (future functionality)
         (void)autoHNSWParam;
+
+        // RESTORE OpenMP threading at the start of each operation
+        #ifdef _OPENMP
+        int max_threads = std::thread::hardware_concurrency();
+        omp_set_num_threads(max_threads);
+        omp_set_nested(1);
+        omp_set_dynamic(1);
+        #endif
 
         if (!model || !data || !embedding || n_obs <= 0 || n_dim <= 0 || embedding_dim <= 0) {
             return UWOT_ERROR_INVALID_PARAMS;
@@ -103,6 +112,14 @@ extern "C" {
         int n_dim,
         float* embedding
     ) {
+        // RESTORE OpenMP threading at the start of each operation
+        #ifdef _OPENMP
+        int max_threads = std::thread::hardware_concurrency();
+        omp_set_num_threads(max_threads);
+        omp_set_nested(1);
+        omp_set_dynamic(1);
+        #endif
+
         if (!model || !new_data || !embedding || n_new_obs <= 0 || n_dim <= 0) {
             return UWOT_ERROR_INVALID_PARAMS;
         }
@@ -131,6 +148,14 @@ extern "C" {
         float* percentile_rank,
         float* z_score
     ) {
+        // RESTORE OpenMP threading at the start of each operation
+        #ifdef _OPENMP
+        int max_threads = std::thread::hardware_concurrency();
+        omp_set_num_threads(max_threads);
+        omp_set_nested(1);
+        omp_set_dynamic(1);
+        #endif
+
         if (!model || !new_data || !embedding || n_new_obs <= 0 || n_dim <= 0) {
             return UWOT_ERROR_INVALID_PARAMS;
         }

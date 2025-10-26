@@ -12,7 +12,7 @@
     <!-- Enhanced NuGet metadata -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>UMAPuwotSharp</PackageId>
-    <Version>3.38.0</Version>
+    <Version>3.39.0</Version>
     <Authors>Amin Gholiha</Authors>
     <Company>ID Soft AB</Company>
     <Product>UMAPuwotSharp Enhanced with HNSW</Product>
@@ -25,7 +25,7 @@
     <PackageProjectUrl>https://github.com/78Spinoza/UMAP</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageReleaseNotes><![CDATA[
-🚨 CRITICAL STABILITY FIX - UMAP v3.38.0: Garbage Collection Crash Resolution
+🚨 PERFORMANCE CRITICAL FIX - UMAP v3.39.0: OpenMP Threading Resolution
 
 🚨 IMMEDIATE UPGRADE RECOMMENDED: Fixes critical production crash in transform operations!
 
@@ -79,6 +79,19 @@ private static readonly NativeProgressCallbackV2 DefaultCallback = (phase, curre
 
 ⚠️ UPGRADE IMMEDIATELY:
 This fix resolves a critical production stability issue that could cause random application crashes during transform operations. The garbage collection bug was timing-dependent and could occur intermittently, making it particularly dangerous for production systems.
+
+🔧 PRIMARY v3.39.0 FIX: OpenMP Threading Bug Resolution
+- ❌ **Issue**: OpenMP threads dropping from 8 to 1 during umappp optimization phase
+- ✅ **Fixed**: Thread restoration at start of all operations (fit, transform, transform_detailed)
+- 🛠️ **Solution**: Added omp_set_num_threads(max_threads) with std::thread::hardware_concurrency()
+- ⚡ **Impact**: Consistent maximum CPU utilization throughout entire UMAP pipeline
+- 🔧 **Root Cause**: Premature OpenMP cleanup code was forcing single-threaded mode during optimization
+
+🎯 PRODUCTION IMPACT:
+- ✅ **Consistent Performance**: Full 8-core utilization maintained during training and transform
+- ✅ **Faster Training**: No more unexpected slow-downs during optimization phase
+- ✅ **Predictable Behavior**: Same thread count from start to finish
+- ✅ **Cross-Platform**: Fix applies to both Windows and Linux builds
 
 🎉 CONTINUES v3.37.0 FEATURES: Performance Revolution with Production Stability
 
