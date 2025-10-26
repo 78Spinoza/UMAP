@@ -1,7 +1,7 @@
 #include "uwot_fit.h"
 #include "uwot_simple_wrapper.h"
-#include "uwot_quantization.h"
 #include "uwot_distance.h"
+#include "optimize_layout.hpp"
 #include <iostream>
 #include <fstream>
 #include <algorithm>
@@ -24,6 +24,7 @@
 #include "Status.hpp"
 #include "NeighborList.hpp"
 #include "uwot_hnsw_knncolle.hpp"
+#include "uwot_hnsw_utils.h"
 
 // Include uwot headers
 #include "smooth_knn.h"
@@ -172,8 +173,7 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
         int random_seed,
         int M,
         int ef_construction,
-        int ef_search,
-        int useQuantization) {
+        int ef_search) {
 
         if (!model || !data || !embedding || n_obs <= 0 || n_dim <= 0 || embedding_dim <= 0) {
             return UWOT_ERROR_INVALID_PARAMS;
@@ -183,8 +183,11 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
             // Create wrapped callback for progress reporting
             auto wrapped_callback = progress_callback;
 
+            // Set up error callback for HNSW operations
+            hnsw_utils::set_hnsw_error_callback(wrapped_callback);
+
             if (wrapped_callback) {
-                wrapped_callback("🚀 UMAPPP+HNSW CODE PATH ACTIVE 🚀", 0, 100, 0.0f, "Using proven umappp reference implementation with HNSW k-NN search");
+                wrapped_callback("UMAPPP+HNSW CODE PATH ACTIVE", 0, 100, 0.0f, "Using proven umappp reference implementation with HNSW k-NN search");
             }
 
             // Create umappp Options from parameters
@@ -202,6 +205,14 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
             // Use all available CPU cores for maximum performance
             options.num_threads = std::thread::hardware_concurrency();
             options.parallel_optimization = true;
+
+            // Set up progress callback for HNSW path
+            if (wrapped_callback) {
+                options.progress_callback = [wrapped_callback](int current_epoch, int total_epochs, const double* embedding) {
+                    float progress = 60.0f + (95.0f - 60.0f) * (static_cast<float>(current_epoch) / static_cast<float>(total_epochs));
+                    wrapped_callback("Optimizing layout", current_epoch, total_epochs, progress, "umappp optimization with HNSW");
+                };
+            }
 
             // Report CPU core usage to user
             if (wrapped_callback) {
@@ -351,7 +362,7 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
 
                 // EXACT k-NN mode - PROPER IMPLEMENTATION
                 if (wrapped_callback) {
-                    wrapped_callback("Exact k-NN mode", 50, 100, 50.0f, "Computing exact k-NN graph (O(n²) - slow but exact)");
+                    wrapped_callback("Exact k-NN mode", 50, 100, 50.0f, "Computing exact k-NN graph (O(n^2) - slow but exact)");
                 }
 
                 // Create SimpleMatrix from the data for umappp
@@ -400,6 +411,9 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
                 exact_options.min_dist = min_dist;
                 exact_options.num_epochs = n_epochs;
                 exact_options.num_neighbors = n_neighbors;
+                // Use all available CPU cores for maximum performance (Linux & Windows friendly)
+                exact_options.num_threads = std::thread::hardware_concurrency();
+                exact_options.parallel_optimization = true;
 
                 if (random_seed >= 0) {
                     exact_options.initialize_seed = static_cast<uint64_t>(random_seed);
@@ -409,12 +423,16 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
                     wrapped_callback("Initializing umappp", 50, 100, 50.0f, "Setting up umappp optimization with exact k-NN");
                 }
 
+                // Set up progress callback in umappp options before initialization
+                if (wrapped_callback) {
+                    exact_options.progress_callback = [wrapped_callback](int current_epoch, int total_epochs, const double* embedding) {
+                        float progress = 60.0f + (95.0f - 60.0f) * (static_cast<float>(current_epoch) / static_cast<float>(total_epochs));
+                        wrapped_callback("Optimizing layout", current_epoch, total_epochs, progress, "umappp exact k-NN optimization");
+                    };
+                }
+
                 // Initialize umappp with exact k-NN prebuilt index - write directly to output embedding
                 auto exact_status = umappp::initialize<int, float, float>(*exact_knn_index, embedding_dim, embedding, std::move(exact_options));
-
-                if (wrapped_callback) {
-                    wrapped_callback("Optimizing layout", 60, 100, 60.0f, "Running umappp optimization with exact k-NN");
-                }
 
                 // Get thread count and report OpenMP usage for exact k-NN
                 int exact_n_threads = omp_get_max_threads();
@@ -423,17 +441,8 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
                     wrapped_callback("Thread Detection", 61, 100, 61.0f, thread_info.c_str());
                 }
 
-                // FAST: Multi-threaded optimization WITH progress callback for exact k-NN
-                auto exact_progress_callback = [](int epoch, int total_epochs, const double* embedding, void* user_data) {
-                    auto* wrapped_callback = static_cast<std::function<void(const char*, int, int, float, const char*)>*>(user_data);
-                    if (*wrapped_callback) {
-                        float progress = 60.0f + (95.0f - 60.0f) * (static_cast<float>(epoch) / static_cast<float>(total_epochs));
-                        (*wrapped_callback)("Optimizing layout", epoch + 1, total_epochs, progress, "umappp exact k-NN optimization");
-                    }
-                };
-
-                // Call the FAST multi-threaded version for exact k-NN
-                umappp::optimize_layout(embedding, *exact_knn_index, exact_status, exact_options, exact_n_threads, exact_progress_callback, &wrapped_callback);
+                // Run optimization with native progress callback support - maximum performance!
+                exact_status.run(embedding);
 
                 if (wrapped_callback) {
                     wrapped_callback("Exact k-NN optimization completed", 95, 100, 95.0f, "Exact k-NN optimization finished successfully");
@@ -601,10 +610,6 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
             // Initialize umappp with fuzzy neighbor list - write directly to output embedding
             auto status = umappp::initialize<int, float>(std::move(fuzzy_neighbors), embedding_dim, embedding, std::move(options));
 
-            if (wrapped_callback) {
-                wrapped_callback("Optimizing layout", 60, 100, 0.0f, "Running umappp optimization with fuzzy simplicial sets (smooth_knn)");
-            }
-
             // Get thread count and report OpenMP usage
             int n_threads = omp_get_max_threads();
             if (wrapped_callback) {
@@ -612,17 +617,8 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
                 wrapped_callback("Thread Detection", 61, 100, 61.0f, thread_info.c_str());
             }
 
-            // FAST: Multi-threaded optimization WITH progress callback
-            auto progress_callback = [](int epoch, int total_epochs, const double* embedding, void* user_data) {
-                auto* wrapped_callback = static_cast<std::function<void(const char*, int, int, float, const char*)>*>(user_data);
-                if (*wrapped_callback) {
-                    float progress = 60.0f + (95.0f - 60.0f) * (static_cast<float>(epoch) / static_cast<float>(total_epochs));
-                    (*wrapped_callback)("Optimizing layout", epoch + 1, total_epochs, progress, "umappp optimization with HNSW");
-                }
-            };
-
-            // Call the FAST multi-threaded version
-            umappp::optimize_layout(embedding, fuzzy_neighbors, status, options, n_threads, progress_callback, &wrapped_callback);
+            // Run optimization with native progress callback support - maximum performance!
+            status.run(embedding);
 
             if (wrapped_callback) {
                 wrapped_callback("Finalizing", 95, 100, 95.0f, "umappp optimization completed");
@@ -755,7 +751,6 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
             model->hnsw_M = actual_M;
             model->hnsw_ef_construction = actual_ef_construction;
             model->hnsw_ef_search = actual_ef_search;
-            model->use_quantization = (useQuantization != 0);
 
             // Save embedding to model for persistence (copy from output buffer)
             model->embedding.resize(static_cast<size_t>(n_obs) * static_cast<size_t>(embedding_dim));

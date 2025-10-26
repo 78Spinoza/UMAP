@@ -8,10 +8,10 @@
 // Core UMAP model structure
 struct UwotModel {
     // Model parameters - LARGE DATASET SUPPORT
-    int64_t n_vertices;        // ✅ Up to 9E18 points (was int)
-    int64_t n_dim;             // ✅ High-dimensional support (was int)
-    int32_t embedding_dim;     // ✅ Keep int32 (rarely > 2B)
-    int32_t n_neighbors;       // ✅ Keep int32 (rarely > 2B)
+    int64_t n_vertices;        // Up to 9E18 points (was int)
+    int64_t n_dim;             // High-dimensional support (was int)
+    int32_t embedding_dim;     // Keep int32 (rarely > 2B)
+    int32_t n_neighbors;       // Keep int32 (rarely > 2B)
     float min_dist;
     float spread; // UMAP spread parameter (controls global scale)
     UwotMetric metric;
@@ -97,15 +97,9 @@ struct UwotModel {
     int hnsw_M;                        // Graph degree parameter (16-64)
     int hnsw_ef_construction;          // Build quality parameter (64-256)
     int hnsw_ef_search;                // Query quality parameter (32-128)
-    bool use_quantization;             // Enable Product Quantization
 
     // Reproducibility parameters
     int random_seed;                   // Random seed for reproducible training (-1 = random)
-
-    // Product Quantization data structures
-    std::vector<uint8_t> pq_codes;     // Quantized vector codes (n_vertices * pq_m bytes)
-    std::vector<float> pq_centroids;   // PQ codebook (pq_m * 256 * subspace_dim floats)
-    int pq_m;                          // Number of subspaces (default: 4)
 
     // Embedding data preservation option
     bool always_save_embedding_data;    // When true, save original embeddings and rebuild HNSW on load
@@ -136,7 +130,7 @@ struct UwotModel {
         p99_embedding_distance(0.0f), mild_embedding_outlier_threshold(0.0f),
         extreme_embedding_outlier_threshold(0.0f), median_embedding_distance(0.0f),
         exact_embedding_match_threshold(1e-3f), hnsw_M(32), hnsw_ef_construction(128),
-        hnsw_ef_search(64), use_quantization(false), random_seed(-1), pq_m(4), normalization_mode(1),
+        hnsw_ef_search(64), random_seed(-1), normalization_mode(1),
         // Embedding data preservation
         always_save_embedding_data(false),
         // CRC32 validation

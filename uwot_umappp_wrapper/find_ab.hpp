@@ -119,7 +119,7 @@ std::pair<Float_, Float_> find_ab(const Float_ spread, const Float_ min_dist) {
         }
 
         bool okay = false;
-        Float_ candidate_a, candidate_b, ss_next;
+        Float_ candidate_a = a, candidate_b = b, ss_next = ss;
 
         // To get from epsilon to max_dampener for a double-precision Float_ is
         // 62 Levenberg-Marquardt iterations; that should be acceptable for the

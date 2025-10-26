@@ -30,7 +30,7 @@ extern "C" {
 #define UWOT_ERROR_CRC_MISMATCH -7
 
 // Version information
-#define UWOT_WRAPPER_VERSION_STRING "3.35.0"
+#define UWOT_WRAPPER_VERSION_STRING "3.36.0"
 
 // Distance metrics
     typedef enum {
@@ -43,11 +43,11 @@ extern "C" {
 
     // Outlier level enumeration for enhanced safety detection
     typedef enum {
-        UWOT_OUTLIER_NORMAL = 0,      // Within normal range (≤ p95)
+        UWOT_OUTLIER_NORMAL = 0,      // Within normal range (<= p95)
         UWOT_OUTLIER_UNUSUAL = 1,     // Unusual but acceptable (p95-p99)
-        UWOT_OUTLIER_MILD = 2,        // Mild outlier (p99 to 2.5σ)
-        UWOT_OUTLIER_EXTREME = 3,     // Extreme outlier (2.5σ to 4σ)
-        UWOT_OUTLIER_NOMANSLAND = 4   // No man's land (> 4σ)
+        UWOT_OUTLIER_MILD = 2,        // Mild outlier (p99 to 2.5 sigma)
+        UWOT_OUTLIER_EXTREME = 3,     // Extreme outlier (2.5 sigma to 4 sigma)
+        UWOT_OUTLIER_NOMANSLAND = 4   // No man's land (> 4 sigma)
     } UwotOutlierLevel;
 
     // Forward declaration
@@ -96,7 +96,6 @@ extern "C" {
         int M = -1,
         int ef_construction = -1,
         int ef_search = -1,
-        int use_quantization = 0,
         int random_seed = -1,
         int autoHNSWParam = 1);
 

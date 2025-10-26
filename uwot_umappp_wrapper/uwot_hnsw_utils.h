@@ -50,7 +50,7 @@ public:
     }
 };
 
-// 🔧 CRITICAL FIX: Custom Cosine Space for HNSW
+// CRITICAL FIX: Custom Cosine Space for HNSW
 // InnerProductSpace returns dot product (higher = more similar), but HNSW expects smaller distances = closer
 // We need to negate the dot product so larger similarity = smaller "distance"
 class CosineSpace : public hnswlib::SpaceInterface<float> {
@@ -76,7 +76,7 @@ public:
                 dot += x[i] * y[i];
             }
 
-            // 🔧 KEY FIX: Return negative dot product
+            // KEY FIX: Return negative dot product
             // Higher similarity (larger dot) = smaller distance
             return -dot;
         };
@@ -132,6 +132,10 @@ namespace hnsw_utils {
 
     void add_points_to_hnsw(hnswlib::HierarchicalNSW<float>* hnsw_index,
         const std::vector<float>& normalized_data, int n_obs, int n_dim);
+
+    // Error callback management for HNSW operations
+    void set_hnsw_error_callback(uwot_progress_callback_v2 callback);
+    void report_hnsw_error(const std::string& error_message);
 
     // Temporary normalization utilities (will be moved to separate module later)
     namespace NormalizationPipeline {

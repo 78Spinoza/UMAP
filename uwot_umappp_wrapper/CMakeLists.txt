@@ -82,7 +82,6 @@ add_library(uwot_umappp SHARED
     uwot_hnsw_utils.cpp
     uwot_progress_utils.cpp
     uwot_distance.cpp
-    uwot_quantization.cpp
     uwot_crc32.cpp
     lz4.c
 )

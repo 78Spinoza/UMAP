@@ -412,7 +412,7 @@ namespace UMAPuwotSharp.Tests
 
                     Console.WriteLine($"Max difference: {maxDifference:F6}");
 
-                    // Validate projection consistency (tolerance allows for quantization effects)
+                    // Validate projection consistency (tolerance allows for numerical precision)
                     const double tolerance = 0.001; // Stricter tolerance for C# integration test
                     Assert.IsTrue(maxDifference < tolerance,
                         $"Projection difference ({maxDifference:F6}) should be < {tolerance:F6} for consistent save/load");
@@ -466,7 +466,7 @@ namespace UMAPuwotSharp.Tests
             var data = new float[nSamples, nFeatures];
             var random = new Random(seed);
 
-            // Generate simple normal distribution (same as C++ test) for quantization testing
+            // Generate simple normal distribution (same as C++ test) for integration testing
             for (int i = 0; i < nSamples; i++)
             {
                 for (int j = 0; j < nFeatures; j++)
@@ -486,7 +486,7 @@ namespace UMAPuwotSharp.Tests
         private static float[,] CreateCppMatchingTestData()
         {
             // Create large dataset that properly exercises HNSW index and exact match detection
-            // Use realistic size that would trigger the original quantization bug
+            // Use realistic size that would trigger HNSW index optimization
             const int nSamples = 2000; // Large dataset to properly test HNSW index
             const int nFeatures = 305;
             var data = new float[nSamples, nFeatures];

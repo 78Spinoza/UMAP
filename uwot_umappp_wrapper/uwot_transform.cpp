@@ -1,6 +1,5 @@
 #include "uwot_transform.h"
 #include "uwot_simple_wrapper.h"
-#include "uwot_quantization.h"
 #include "uwot_crc32.h"
 #include "uwot_progress_utils.h"
 #include <iostream>
@@ -102,49 +101,8 @@ namespace transform_utils {
                 }
                 // Point normalization completed
 
-                // CRITICAL FIX: Apply quantization if model uses it (must match training data space)
-                std::vector<float> search_point = normalized_point; // Default: use normalized point
-
-                if (model->use_quantization && !model->pq_centroids.empty()) {
-                    try {
-                        // Step 1: Quantize the normalized point using saved PQ centroids
-                        std::vector<uint8_t> point_codes;
-                        int subspace_dim = n_dim / model->pq_m;
-                        point_codes.resize(model->pq_m);
-
-                        // Encode single point using existing centroids
-                        for (int sub = 0; sub < model->pq_m; sub++) {
-                            float min_dist = std::numeric_limits<float>::max();
-                            uint8_t best_code = 0;
-
-                            // Find closest centroid in this subspace
-                            for (int c = 0; c < 256; c++) {
-                                float dist = 0.0f;
-                                for (int d = 0; d < subspace_dim; d++) {
-                                    int point_idx = sub * subspace_dim + d;
-                                    int centroid_idx = sub * 256 * subspace_dim + c * subspace_dim + d;
-                                    float diff = normalized_point[point_idx] - model->pq_centroids[centroid_idx];
-                                    dist += diff * diff;
-                                }
-                                if (dist < min_dist) {
-                                    min_dist = dist;
-                                    best_code = c;
-                                }
-                            }
-                            point_codes[sub] = best_code;
-                        }
-
-                        // Step 2: Reconstruct quantized point for HNSW search
-                        std::vector<float> quantized_point;
-                        pq_utils::reconstruct_vector(point_codes, 0, model->pq_m,
-                                                   model->pq_centroids, subspace_dim, quantized_point);
-                        search_point = quantized_point;
-
-                    } catch (...) {
-                        // Quantization failed - fall back to normalized point
-                        search_point = normalized_point;
-                    }
-                }
+                // Use normalized point directly for HNSW search (quantization removed - no benefit with HNSW)
+                std::vector<float> search_point = normalized_point;
 
                 // Note: Embedding space HNSW index is optional for basic transform (only needed for AI inference)
 
@@ -168,8 +126,13 @@ namespace transform_utils {
                 if (model->original_space_index) {
                     try {
                         original_ef = model->original_space_index->ef_;
+                    } catch (const std::exception& e) {
+                        // HNSW is corrupted - disable it for this operation and report error
+                        hnsw_utils::report_hnsw_error("HNSW corruption detected: " + std::string(e.what()));
+                        original_ef = 0;
                     } catch (...) {
-                        // HNSW is corrupted - disable it for this operation
+                        // HNSW is corrupted - disable it for this operation and report error
+                        hnsw_utils::report_hnsw_error("HNSW corruption detected: unknown error");
                         original_ef = 0;
                     }
                 }
@@ -208,8 +171,18 @@ namespace transform_utils {
                                 exact_match_idx = neighbor_idx;
                             }
                         }
+                    } catch (const std::exception& e) {
+                        // HNSW search failed - restore ef and report error
+                        hnsw_utils::report_hnsw_error("HNSW search failed: " + std::string(e.what()));
+                        try {
+                            model->original_space_index->setEf(original_ef);
+                        } catch (...) {
+                            // Ignore - we're already failing
+                        }
+                        return UWOT_ERROR_INVALID_PARAMS;
                     } catch (...) {
-                        // HNSW search failed - restore ef and return error
+                        // HNSW search failed - restore ef and report error
+                        hnsw_utils::report_hnsw_error("HNSW search failed: unknown error");
                         try {
                             model->original_space_index->setEf(original_ef);
                         } catch (...) {
@@ -376,8 +349,21 @@ namespace transform_utils {
                                 }
                             }
                         }
+                    } catch (const std::exception& e) {
+                        // HNSW failed - report error and fall back to exact k-NN
+                        hnsw_utils::report_hnsw_error("HNSW k-NN search failed: " + std::string(e.what()) + " - using exact k-NN fallback");
+                        for (int k = 0; k < model->n_neighbors && k < static_cast<int>(model->nn_indices.size()); k++) {
+                            int neighbor_idx = model->nn_indices[k];
+                            float distance = model->nn_distances[k];
+
+                            original_neighbors.push_back(neighbor_idx);
+                            original_distances.push_back(distance);
+                            weights.push_back(1.0f / model->n_neighbors);  // Uniform weights for fallback
+                            total_weight += 1.0f / model->n_neighbors;
+                        }
                     } catch (...) {
-                        // HNSW failed - fall back to exact k-NN
+                        // HNSW failed - report error and fall back to exact k-NN
+                        hnsw_utils::report_hnsw_error("HNSW k-NN search failed: unknown error - using exact k-NN fallback");
                         for (int k = 0; k < model->n_neighbors && k < static_cast<int>(model->nn_indices.size()); k++) {
                             int neighbor_idx = model->nn_indices[k];
                             float distance = model->nn_distances[k];

@@ -1095,7 +1095,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             return;
         }
         // check if there is vacant place
-        tableint internal_id_replaced;
+        tableint internal_id_replaced = 0;
         std::unique_lock <std::mutex> lock_deleted_elements(deleted_elements_lock);
         bool is_vacant_place = !deleted_elements.empty();
         if (is_vacant_place) {

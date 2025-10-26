@@ -56,6 +56,21 @@ namespace endian_utils {
 // HNSW space factory implementation
 namespace hnsw_utils {
 
+    // Thread-local error callback for HNSW operations
+    thread_local uwot_progress_callback_v2 g_error_callback = nullptr;
+
+    // Set error callback for HNSW operations
+    void set_hnsw_error_callback(uwot_progress_callback_v2 callback) {
+        g_error_callback = callback;
+    }
+
+    // Report error through callback system
+    void report_hnsw_error(const std::string& error_message) {
+        if (g_error_callback) {
+            g_error_callback("HNSW Error", 0, 100, 0.0f, error_message.c_str());
+        }
+    }
+
     bool SpaceFactory::create_space(UwotMetric metric, int n_dim) {
         current_metric = metric;
         current_dim = n_dim;
@@ -72,7 +87,7 @@ namespace hnsw_utils {
                 return true;
 
             case UWOT_METRIC_COSINE:
-                // 🔧 CRITICAL FIX: Use custom CosineSpace instead of InnerProductSpace
+                // CRITICAL FIX: Use custom CosineSpace instead of InnerProductSpace
                 // InnerProductSpace returns dot product (higher = more similar), but HNSW expects smaller distances = closer
                 // Our CosineSpace returns -dot_product so larger similarity = smaller distance
                 cosine_space = std::make_unique<CosineSpace>(n_dim);
@@ -96,7 +111,7 @@ namespace hnsw_utils {
         case UWOT_METRIC_EUCLIDEAN:
             return l2_space.get();
         case UWOT_METRIC_COSINE:
-            // 🔧 CRITICAL FIX: Return custom CosineSpace instead of InnerProductSpace
+            // CRITICAL FIX: Return custom CosineSpace instead of InnerProductSpace
             return cosine_space.get();
         case UWOT_METRIC_MANHATTAN:
             return l1_space.get();
@@ -267,8 +282,11 @@ namespace hnsw_utils {
 //                      << " completed successfully" << std::endl;
 
         } catch (const std::exception& e) {
-            // std::cout << "[STREAM] HNSW Save: Exception: " << e.what() << std::endl;
-            throw;
+            // Report HNSW save errors through callback system
+            std::string error_msg = "HNSW Save Error: " + std::string(e.what());
+            report_hnsw_error(error_msg);
+            // Re-throw with proper error message
+            throw std::runtime_error(error_msg);
         }
     }
 
@@ -332,7 +350,10 @@ namespace hnsw_utils {
             // std::cout << "[STREAM] HNSW Load: ✅ CRC32 validation passed - Stream loadIndex() completed successfully" << std::endl;
 
         } catch (const std::exception& e) {
-            // std::cout << "[STREAM] HNSW Load: Exception: " << e.what() << std::endl;
+            // Report HNSW load errors through callback system
+            std::string error_msg = "HNSW Load Error: " + std::string(e.what());
+            report_hnsw_error(error_msg);
+            // Re-throw the exception
             throw;
         }
     }

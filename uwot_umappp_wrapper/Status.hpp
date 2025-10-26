@@ -109,7 +109,8 @@ public:
                 my_options.repulsion_strength,
                 my_options.learning_rate,
                 my_engine,
-                epoch_limit
+                epoch_limit,
+                my_options.progress_callback
             );
         } else {
             internal::optimize_layout_parallel<Index_, Float_>(
@@ -122,7 +123,8 @@ public:
                 my_options.learning_rate,
                 my_engine,
                 epoch_limit,
-                my_options.num_threads
+                my_options.num_threads,
+                my_options.progress_callback
             );
         }
     }

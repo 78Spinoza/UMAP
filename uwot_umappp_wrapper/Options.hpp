@@ -3,6 +3,7 @@
 
 #include <random>
 #include <optional>
+#include <functional>
 
 #include "sanisizer/sanisizer.hpp"
 #include "irlba/irlba.hpp"
@@ -204,6 +205,16 @@ struct Options {
      * In such cases, enabling parallel optimization and calling `Status::run()` will throw an error.
      */
     int parallel_optimization = false;
+
+    /**
+     * Progress callback function for optimization iterations.
+     * Called during the layout optimization to report progress.
+     * The function signature is: void(int current_epoch, int total_epochs, const double* embedding)
+     * - current_epoch: Current epoch number (1-based)
+     * - total_epochs: Total number of epochs to run
+     * - embedding: Current embedding coordinates (can be used to check convergence)
+     */
+    std::function<void(int, int, const double*)> progress_callback;
 };
 
 }

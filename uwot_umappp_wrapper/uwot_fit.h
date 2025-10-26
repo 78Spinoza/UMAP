@@ -42,8 +42,7 @@ namespace fit_utils {
         int random_seed = -1,
         int M = 16,
         int ef_construction = 200,
-        int ef_search = 50,
-        int useQuantization = 0
+        int ef_search = 50
     );
 
     // Helper functions for uwot_fit refactoring

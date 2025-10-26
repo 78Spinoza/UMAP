@@ -36,7 +36,6 @@ The project uses the real umappp implementation with advanced features:
 │   ├── Enhanced wrapper files
 │   │   ├── uwot_fit.cpp/.h          # Training with umappp algorithms
 │   │   ├── uwot_simple_wrapper.cpp/.h # Main API interface
-│   │   ├── uwot_quantization.cpp/.h # 16-bit product quantization
 │   │   ├── uwot_transform.cpp/.h   # Enhanced transform with safety analysis
 │   │   ├── uwot_persistence.cpp/.h  # Stream-based HNSW serialization
 │   │   └── All supporting modules (progress, distance, CRC32, etc.)
@@ -60,7 +59,7 @@ The project uses the real umappp implementation with advanced features:
 - **✅ Spectral Initialization**: Graph Laplacian eigenvectors for manifold-aware starting positions
 - **✅ Proper Optimization**: Correct epoch scheduling with balanced positive/negative sampling
 - **✅ Better Topology Preservation**: Specifically designed to handle complex non-linear structures
-- **✅ Modern Feature Set**: All advanced features working (quantization, AutoHNSW, dual architecture)
+- **✅ Modern Feature Set**: All advanced features working (AutoHNSW, dual architecture)
 - **✅ Stable Builds**: Reliable cross-platform compilation with comprehensive testing
 
 ### **HNSW-knncolle Bridge Architecture**
@@ -99,7 +98,6 @@ BuildDockerLinuxWindows.bat # Builds both Windows + Linux with Docker
 
 # The resulting DLL has all advanced features:
 # - Spectral initialization (solves fragmentation!)
-# - 16-bit quantization (85-95% file size reduction)
 # - AutoHNSW optimization (50-2000x faster)
 # - Dual HNSW architecture (AI inference)
 # - TransformWithSafety (5-level outlier detection)
@@ -115,7 +113,7 @@ BuildDockerLinuxWindows.bat # Builds both Windows + Linux with Docker
 ✅ **Exact k-NN Integration**: Full `force_exact_knn` parameter support with knncolle-based exact computation
 ✅ **Dual-Mode Architecture**: Choose between HNSW (fast) and exact k-NN (precise) with umappp integration
 ✅ **CPU Core Reporting**: Real-time callback showing number of CPU cores used for parallel processing
-✅ **Parameter Propagation Fix**: ALL C# parameters now properly propagate to C++ (quantization, random seed, etc.)
+✅ **Parameter Propagation Fix**: ALL C# parameters now properly propagate to C++ (random seed, etc.)
 ✅ **Complete umappp Integration**: Both HNSW and exact paths use proven libscran/umappp algorithms
 ✅ **Production Ready**: Extensive validation with MSE < 0.01 accuracy for both modes
 
@@ -190,7 +188,6 @@ uwot_pure_cpp/
 │   ├── uwot_hnsw_utils.cpp/.h         # HNSW optimization
 │   ├── uwot_persistence.cpp/.h        # Save/load operations
 │   ├── uwot_progress_utils.cpp/.h     # Progress reporting
-│   ├── uwot_quantization.cpp/.h       # Data quantization
 │   └── uwot_distance.cpp/.h           # Distance metrics
 └── Testing & Validation
     ├── test_standard_comprehensive.cpp # Complete validation suite
@@ -503,169 +500,6 @@ The stream-based HNSW serialization with CRC32 validation is fully implemented a
 
 **🎯 Result**: Deployment-grade reliability with automatic corruption detection, zero file management overhead, and intelligent HNSW parameter optimization with recall validation.
 
-## 🗜️ 16-bit Quantization for Massive File Compression (v3.13.0+)
-
-### 85-95% Model File Size Reduction
-New **16-bit Product Quantization (PQ)** feature provides dramatic storage savings with minimal accuracy loss:
-
-```csharp
-// Standard model (no quantization) - full precision
-var standardModel = new UMapModel();
-var embedding = standardModel.Fit(data, useQuantization: false);  // Default
-standardModel.SaveModel("model_standard.umap");  // 240MB file
-
-// Quantized model - 85-95% file size reduction
-var quantizedModel = new UMapModel();
-var quantizedEmbedding = quantizedModel.Fit(data, useQuantization: true);  // Enable compression
-quantizedModel.SaveModel("model_quantized.umap");  // 15-45MB file (90% smaller!)
-
-// Both models produce nearly identical results (0.1-0.2% difference)
-```
-
-### Quantization Performance Impact
-| Feature | Standard Model | Quantized Model | Benefit |
-|---------|---------------|-----------------|---------|
-| **File Size** | 240MB | 15-45MB | **85-95% reduction** |
-| **Training Speed** | Baseline | Similar (slight PQ overhead) | Minimal impact |
-| **Transform Speed** | <3ms (HNSW) | <3ms (HNSW) | **No change** |
-| **Save/Load Speed** | Baseline | **3-5x faster** | Smaller files = faster I/O |
-| **Accuracy Loss** | 0% | <0.2% | **Negligible** |
-| **Memory Usage** | Standard | Reduced during transforms | Additional savings |
-
-### Production Deployment Benefits
-- **Storage costs**: Up to 95% reduction in model storage requirements
-- **Network efficiency**: Dramatically faster model distribution and updates
-- **Edge deployment**: Smaller models fit better on resource-constrained devices
-- **Backup/archival**: Significant storage savings for model versioning
-- **Docker images**: Reduced container sizes for ML services
-
-```csharp
-// Example: Production deployment with quantization
-var model = new UMapModel();
-
-// Train with quantization for deployment efficiency
-var embedding = model.FitWithProgress(trainingData,
-    progressCallback: progress => Console.WriteLine($"Training: {progress.PercentComplete:F1}%"),
-    embeddingDimension: 20,      // Higher dimensions for ML pipelines
-    useQuantization: true        // Enable 85-95% compression
-);
-
-// Save compressed model for production
-model.SaveModel("production_model.umap");  // Dramatically smaller file
-
-// Later: Load and use compressed model (HNSW reconstructed automatically)
-var deployedModel = UMapModel.LoadModel("production_model.umap");
-var newProjections = deployedModel.Transform(newData);  // Same performance
-```
-
-### 🗜️ Quantization Architecture & Data Preservation
-
-#### What Gets Quantized vs. What Remains Full Precision
-
-**Quantized (16-bit Product Quantization):**
-- **k-NN Graph Data**: Neighbor indices and distance values stored as 16-bit codes
-- **Original Training Data**: 32-bit float → 16-bit quantization (when use_quantization=true)
-- **Distance Matrix Elements**: Quantized for efficient storage and reconstruction
-
-**Remains Full Precision:**
-- **HNSW Indices**: Both original space AND embedding space HNSW indices saved at full precision
-- **Embedding Coordinates**: Final UMAP embeddings preserved as 32-bit floats
-- **Model Metadata**: All parameters, statistics, and configuration data
-- **Transform Pipeline**: All computations performed in full precision during runtime
-
-#### File Structure with Quantization
-
-```
-UMAP Model File Structure (.umap):
-├── Header & Configuration (full precision)
-│   ├── Model parameters (n_neighbors, min_dist, spread, etc.)
-│   ├── Quantization flags and metadata
-│   ├── HNSW parameters (M, ef_construction, ef_search)
-│   └── Dataset statistics and normalization parameters
-├── Quantized k-NN Graph Data (16-bit compressed)
-│   ├── Product quantization codes for neighbor relationships
-│   ├── Quantized distance matrices
-│   └── Codebooks for PQ reconstruction (full precision)
-├── HNSW Indices (full precision - NOT quantized)
-│   ├── Original space HNSW index (for training reconstruction)
-│   ├── Embedding space HNSW index (for AI inference)
-│   └── CRC32 validation data for both indices
-└── Embedding Results (full precision)
-    ├── Final embedding coordinates
-    ├── Outlier detection statistics
-    └── Transform pipeline parameters
-```
-
-#### Quantization Process Flow
-
-1. **Training Phase (with use_quantization=true):**
-   ```
-   Input Data → Normalization → UMAP Training → k-NN Graph → Product Quantization → Model File
-
-   • Input data quantized to 16-bit codes
-   • k-NN neighbor relationships compressed with PQ
-   • HNSW indices saved at full precision (both spaces)
-   • Final embeddings preserved at full precision
-   ```
-
-2. **Loading Phase (quantized model):**
-   ```
-   Model File → HNSW Load → k-NN Reconstruction → Ready for Transform
-
-   • HNSW indices loaded with CRC32 validation
-   • Quantized k-NN data reconstructed from PQ codes
-   • Original training data approximated from quantization
-   • Model ready for high-performance transforms
-   ```
-
-3. **Transform Phase (identical performance):**
-   ```
-   New Data → Normalization → HNSW Search → Embedding Transform
-
-   • All transforms performed at full precision
-   • Same speed as non-quantized models (HNSW indices unchanged)
-   • Same accuracy for new data projections
-   ```
-
-#### Accuracy & Performance Characteristics
-
-**Quality Validation Results:**
-Extensive testing with 5000×320D datasets shows:
-- **>1% difference points**: 0.1-0.2% (well below 20% threshold)
-- **MSE values**: 6.07×10⁻³ (excellent accuracy preservation)
-- **HNSW reconstruction**: Perfect rebuild from quantized codes
-- **Save/load consistency**: 0.0% difference in loaded model transforms
-
-**When to Use Quantization:**
-
-✅ **Ideal for Quantization:**
-- Large datasets (>10k points) where storage matters
-- Production deployments with limited storage
-- Edge/IoT devices with memory constraints
-- Model versioning and backup storage
-- Network distribution of trained models
-
-❌ **Use Full Precision When:**
-- Maximum numerical precision required
-- Very small datasets (<1k points) where compression benefit is minimal
-- Research scenarios where every bit of accuracy matters
-- Debugging quantization-related issues
-
-**Compression vs. Accuracy Trade-offs:**
-
-| Dataset Size | Standard File | Quantized File | Compression | Accuracy Loss |
-|-------------|---------------|----------------|-------------|----------------|
-| 1k × 300d   | 15MB          | 8MB            | 47%         | <0.1%         |
-| 10k × 300d  | 150MB         | 22MB           | 85%         | <0.15%        |
-| 100k × 300d | 1.5GB         | 120MB          | 92%         | <0.2%         |
-| 50k × 300d   | 750MB         | 45MB           | 94%         | <0.2%         |
-
-**Technical Implementation Details:**
-- **Product Quantization**: Divides high-dimensional vectors into subspaces, quantizes each separately
-- **Codebook Generation**: Optimized during training for minimal reconstruction error
-- **Hierarchical Storage**: Multiple quantization levels for different data types
-- **CRC32 Validation**: All critical data structures protected with checksums
-- **Automatic Fallback**: Graceful handling of quantization edge cases
 
 ## Enhanced Features
 
@@ -694,12 +528,11 @@ var customEmbedding = model.Fit(data,
 
 ### 🚀 **Key Features**
 - **HNSW optimization**: 50-2000x faster with 80-85% memory reduction
-- **16-bit quantization**: 85-95% file size reduction with <0.2% accuracy loss
 - **Arbitrary dimensions**: 1D to 50D embeddings with memory estimation
 - **Multiple distance metrics**: Euclidean, Cosine, Manhattan, Correlation, Hamming
 - **Smart spread defaults**: Automatic optimization based on embedding dimensions
 - **Real-time progress reporting**: Phase-aware callbacks with time estimates
-- **Model persistence**: Save/load trained models efficiently with compression options
+- **Model persistence**: Save/load trained models efficiently
 - **Safety features**: 5-level outlier detection for AI validation
 
 ### 🔧 **Complete API Example with All Features**
@@ -709,7 +542,7 @@ using UMAPuwotSharp;
 // Create model with enhanced features
 using var model = new UMapModel();
 
-// Train with all features: HNSW + quantization + smart defaults + progress reporting
+// Train with all features: HNSW + smart defaults + progress reporting
 var embedding = model.FitWithProgress(
     data: trainingData,
     progressCallback: progress => Console.WriteLine($"Training: {progress.PercentComplete:F1}%"),
@@ -719,14 +552,13 @@ var embedding = model.FitWithProgress(
     nNeighbors: 30,                // Good for 20D
     nEpochs: 300,
     metric: DistanceMetric.Cosine, // HNSW-accelerated!
-    forceExactKnn: false,          // Use HNSW optimization (50-2000x faster)
-    useQuantization: true          // Enable 85-95% file size reduction
+    forceExactKnn: false           // Use HNSW optimization (50-2000x faster)
 );
 
-// Save compressed model (15-45MB vs 240MB uncompressed)
+// Save model
 model.SaveModel("production_model.umap");
 
-// Load and use compressed model (HNSW reconstructed automatically)
+// Load and use model
 using var loadedModel = UMapModel.LoadModel("production_model.umap");
 
 // Transform with safety analysis
@@ -883,7 +715,6 @@ var embedding = model.FitWithProgress(
 
 - **✅ Real umappp Integration**: Complete libscran/umappp reference implementation
 - **✅ Spectral Initialization**: Manifold-aware graph Laplacian eigenvector initialization
-- **✅ 16-bit Quantization**: 85-95% file size reduction with product quantization
 - **✅ AutoHNSW Optimization**: 50-2000x faster with automatic parameter tuning
 - **✅ Dual HNSW Architecture**: Original + embedding space indices for AI inference
 - **✅ TransformWithSafety**: 5-level outlier detection with confidence scoring
@@ -903,7 +734,7 @@ var embedding = model.FitWithProgress(
 - **Status**: ABANDONED due to build failures and fragmentation problems
 - **Build Issues**: Compilation errors in test files, unstable build system
 - **Performance Issues**: Mammoth dataset splits into scattered pieces, poor manifold preservation
-- **Missing Features**: Lacks quantization, AutoHNSW, dual architecture, safety analysis
+- **Missing Features**: Lacks AutoHNSW, dual architecture, safety analysis
 - **Cause**: Outdated architecture with random initialization
 - **Recommendation**: Use uwot_umappp_wrapper for all development - legacy version is non-functional
 
@@ -951,7 +782,7 @@ Enhanced production-ready C# wrapper providing .NET integration:
 
 ### ⚡ **Performance Improvements**
 - **OpenMP parallelization**: Added parallel processing for HNSW point addition (>5000 points)
-- **Improved K-means convergence**: Enhanced convergence detection and empty cluster handling in quantization
+- **Improved K-means convergence**: Enhanced convergence detection and empty cluster handling
 - **L2 normalization fix**: Corrected cosine metric normalization for HNSW consistency
 
 ### 🛡️ **Enhanced Data Validation**
@@ -979,7 +810,7 @@ The fastest way to get started with all enhanced features:
 ### What's New in v3.16.0
 - **🔧 Critical Euclidean Distance Fix**: L2Space squared distance now properly converted with sqrt() for exact match detection
 - **✅ Perfect Pipeline Consistency**: Training embeddings match transform results exactly (MSE = 0)
-- **🧪 All Tests Passing**: 15/15 C# tests passing (fixed previously failing quantization pipeline test)
+- **🧪 All Tests Passing**: 15/15 C# tests passing (fixed previously failing pipeline tests)
 - **🎯 Production Reliability**: Proper exact coordinate preservation for identical training points
 - **📐 High-Precision Applications**: Corrected distance comparisons for validation workflows
 
@@ -1068,7 +899,6 @@ BuildDockerLinuxWindows.bat       # Cross-platform build
 
 This builds the production-ready umappp implementation with:
 - ✅ **Spectral initialization**: Manifold-aware starting positions (solves mammoth fragmentation!)
-- ✅ **16-bit quantization**: 85-95% file size reduction with product quantization
 - ✅ **AutoHNSW optimization**: 50-2000x faster with automatic parameter tuning
 - ✅ **Dual HNSW architecture**: Original + embedding space indices for AI inference
 - ✅ **TransformWithSafety**: 5-level outlier detection with confidence scoring
@@ -1267,7 +1097,6 @@ HNSW acceleration works with multiple distance metrics:
 | **3.16.0** | 2025-10-02 | **Critical Euclidean distance fix**, Perfect pipeline consistency (MSE=0), All 15/15 tests passing, Exact coordinate preservation | Production reliability fix |
 | **3.15.0** | 2025-02-02 | **Stream-based HNSW serialization**, CRC32 data integrity validation, Zero temporary files, Enhanced test thresholds | Deployment-grade reliability |
 | **3.14.0** | 2025-02-01 | **Dual HNSW architecture**, AI pattern similarity search, Embedding space inference, 5-level outlier detection | Revolutionary AI capabilities |
-| **3.13.0** | 2025-01-22 | **16-bit quantization**, 85-95% file size reduction, HNSW reconstruction from quantized codes | Massive storage savings |
 | **3.3.0** | 2025-01-22 | Enhanced HNSW optimization, Improved memory efficiency, Better progress reporting, Cross-platform stability | Refined HNSW performance |
 | **3.1.2** | 2025-01-15 | Smart spread parameter implementation, Dimension-aware defaults, Enhanced progress reporting | Optimal embedding quality across dimensions |
 | **3.1.0** | 2025-01-15 | Revolutionary HNSW optimization, Enhanced API with forceExactKnn parameter, Multi-core OpenMP acceleration | **50-2000x speedup**, 80-85% memory reduction |

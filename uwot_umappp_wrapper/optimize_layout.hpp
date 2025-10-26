@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <functional>
 
 #ifndef UMAPPP_NO_PARALLEL_OPTIMIZATION
 #include <thread>
@@ -118,14 +119,15 @@ Float_ clamp(const Float_ input) {
 template<typename Index_, typename Float_, class Rng_>
 void optimize_layout(
     std::size_t num_dim,
-    Float_* embedding, 
+    Float_* embedding,
     EpochData<Index_, Float_>& setup,
-    Float_ a, 
-    Float_ b, 
+    Float_ a,
+    Float_ b,
     Float_ gamma,
     Float_ initial_alpha,
     Rng_& rng,
-    int epoch_limit
+    int epoch_limit,
+    std::function<void(int, int, const double*)> progress_callback = nullptr
 ) {
     auto& n = setup.current_epoch;
     const auto num_epochs = setup.total_epochs;
@@ -180,6 +182,11 @@ void optimize_layout(
                 setup.epoch_of_next_sample[j] += setup.epochs_per_sample[j];
                 setup.epoch_of_next_negative_sample[j] += num_neg_samples * epochs_per_negative_sample;
             }
+        }
+
+        // Call progress callback at the end of each epoch
+        if (progress_callback) {
+            progress_callback(n + 1, num_epochs, reinterpret_cast<const double*>(embedding));
         }
     }
 
@@ -347,15 +354,16 @@ public:
 template<typename Index_, typename Float_, class Rng_>
 void optimize_layout_parallel(
     const std::size_t num_dim,
-    Float_* const embedding, 
+    Float_* const embedding,
     EpochData<Index_, Float_>& setup,
-    const Float_ a, 
-    const Float_ b, 
+    const Float_ a,
+    const Float_ b,
     const Float_ gamma,
     const Float_ initial_alpha,
     Rng_& rng,
     const int epoch_limit,
-    const int nthreads
+    const int nthreads,
+    std::function<void(int, int, const double*)> progress_callback = nullptr
 ) {
 #ifndef UMAPPP_NO_PARALLEL_OPTIMIZATION
     auto& n = setup.current_epoch;
@@ -552,6 +560,11 @@ void optimize_layout_parallel(
 
         for (int t = 0; t < used_threads; ++t) {
             pool[t].wait();
+        }
+
+        // Call progress callback at the end of each epoch (main thread only for thread safety)
+        if (progress_callback) {
+            progress_callback(n + 1, num_epochs, reinterpret_cast<const double*>(embedding));
         }
     }
 

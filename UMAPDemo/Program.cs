@@ -432,8 +432,8 @@ namespace UMAPDemo
                 data: floatData2,
                 progressCallback: UnifiedProgressCallback,
                 embeddingDimension: 2,
-                nNeighbors: 120,       // Updated to 120 as requested
-                minDist: 0.35f,        // Updated to 0.35 as requested
+                nNeighbors: 60,        // Updated to 60 as requested
+                minDist: 0.4f,         // Updated to 0.4 as requested
                 spread: 1.0f,
                 nEpochs: 300,
                 metric: DistanceMetric.Euclidean,
@@ -982,8 +982,8 @@ HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.
         private static void DemoAdvancedParameterTuning(double[,] data, int[] labels)
         {
             Console.WriteLine("🔬 Running UMAP Advanced Parameter Tuning...");
-            Console.WriteLine("   Test 1: n_neighbors from 5 to 40 (increments of 1) with min_dist=0.1");
-            Console.WriteLine("   Test 2: min_dist from 0.05 to 0.3 (increments of 0.05) with n_neighbors=40");
+            Console.WriteLine("   Test 1: n_neighbors from 5 to 40 (increments of 1) with min_dist=0.4");
+            Console.WriteLine("   Test 2: min_dist from 0.05 to 0.3 (increments of 0.05) with n_neighbors=60");
 
             // Convert double[,] to float[,] for UMAP API
             int nSamples = data.GetLength(0);
@@ -996,12 +996,12 @@ HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.
             var allResults = new List<(string testType, int nNeighbors, float minDist, double[,] embedding, double time, double quality)>();
 
             // === TEST 1: n_neighbors from 10 to 70 with increments of 5 ===
-            Console.WriteLine("\n📊 === TEST 1: n_neighbors Optimization (min_dist=0.1) ===");
+            Console.WriteLine("\n📊 === TEST 1: n_neighbors Optimization (min_dist=0.4) ===");
             var nNeighborsTests = Enumerable.Range(0, 13).Select(i => 10 + i * 5).ToArray(); // 10, 15, 20, 25, ..., 70
 
             foreach (var nNeighbors in nNeighborsTests)
             {
-                Console.WriteLine($"   🔍 Testing n_neighbors = {nNeighbors}, min_dist = 0.1...");
+                Console.WriteLine($"   🔍 Testing n_neighbors = {nNeighbors}, min_dist = 0.4...");
                 var model = new UMapModel();
 
                 var stopwatch = Stopwatch.StartNew();
@@ -1010,7 +1010,7 @@ HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.
                     progressCallback: CreatePrefixedCallback($"N={nNeighbors}"),
                     embeddingDimension: 2,
                     nNeighbors: nNeighbors,
-                    minDist: 0.1f,
+                    minDist: 0.4f,
                     spread: 1.0f,
                     nEpochs: 300,
                     metric: DistanceMetric.Euclidean,
@@ -1035,7 +1035,7 @@ HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.
                 // Save visualization for all results (only 13 total)
                 var paramInfo = CreateFitParamInfo(model, stopwatch.Elapsed.TotalSeconds, "N_Neighbors_Experiments");
                 paramInfo["n_neighbors"] = nNeighbors.ToString();
-                paramInfo["min_dist"] = "0.1";
+                paramInfo["min_dist"] = "0.4";
                 paramInfo["embedding_quality"] = quality.ToString("F4");
 
                 var experimentDir = Path.Combine(ResultsDir, "n_neighbors_experiments");
@@ -1048,13 +1048,13 @@ HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.
                 Console.WriteLine($"      📈 Saved: {Path.GetFileName(outputPath)}");
             }
 
-            // === TEST 2: min_dist from 0.05 to 0.7 with n_neighbors=40 ===
-            Console.WriteLine("\n📊 === TEST 2: min_dist Optimization (n_neighbors=40) ===");
+            // === TEST 2: min_dist from 0.05 to 0.7 with n_neighbors=60 ===
+            Console.WriteLine("\n📊 === TEST 2: min_dist Optimization (n_neighbors=60) ===");
             var minDistTests = new[] { 0.05f, 0.1f, 0.15f, 0.2f, 0.25f, 0.3f, 0.35f, 0.4f, 0.45f, 0.5f, 0.55f, 0.6f, 0.65f, 0.7f };
 
             foreach (var minDist in minDistTests)
             {
-                Console.WriteLine($"   🔍 Testing min_dist = {minDist:F2}, n_neighbors = 40...");
+                Console.WriteLine($"   🔍 Testing min_dist = {minDist:F2}, n_neighbors = 60...");
                 var model = new UMapModel();
 
                 var stopwatch = Stopwatch.StartNew();
@@ -1062,7 +1062,7 @@ HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.
                     data: floatData,
                     progressCallback: CreatePrefixedCallback($"MD={minDist:F2}"),
                     embeddingDimension: 2,
-                    nNeighbors: 40,
+                    nNeighbors: 60,
                     minDist: minDist,
                     spread: 1.0f,
                     nEpochs: 300,

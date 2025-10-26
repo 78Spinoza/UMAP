@@ -41,7 +41,7 @@ template<typename Float_>
 struct NeighborSimilaritiesOptions {
     Float_ local_connectivity = 1.0;
     Float_ bandwidth = 1.0;
-    Float_ min_k_dist_scale = 1e-3; // this is only exposed for easier unit testing.
+    Float_ min_k_dist_scale = static_cast<Float_>(1e-3); // this is only exposed for easier unit testing.
     int num_threads = 1;
 };
 
@@ -144,7 +144,7 @@ void neighbor_similarities(NeighborList<Index_, Float_>& x, const NeighborSimila
                 }
 
                 const Float_ diff = observed - target;
-                constexpr Float_ tol = 1e-5;
+                constexpr Float_ tol = static_cast<Float_>(1e-5);
                 if (std::abs(diff) < tol) {
                     break;
                 }
@@ -187,8 +187,8 @@ void neighbor_similarities(NeighborList<Index_, Float_>& x, const NeighborSimila
 
             // Protect against an overly small sigma.
             Float_ mean_dist = 0;
-            for (const auto& x : all_neighbors) {
-                mean_dist += x.second;
+            for (const auto& neighbor : all_neighbors) {
+                mean_dist += neighbor.second;
             }
             mean_dist /= num_neighbors;
             sigma = std::max(options.min_k_dist_scale * mean_dist, sigma);
