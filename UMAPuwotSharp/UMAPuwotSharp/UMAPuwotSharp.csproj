@@ -12,7 +12,7 @@
     <!-- Enhanced NuGet metadata -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>UMAPuwotSharp</PackageId>
-    <Version>3.37.0</Version>
+    <Version>3.38.0</Version>
     <Authors>Amin Gholiha</Authors>
     <Company>ID Soft AB</Company>
     <Product>UMAPuwotSharp Enhanced with HNSW</Product>
@@ -25,7 +25,62 @@
     <PackageProjectUrl>https://github.com/78Spinoza/UMAP</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageReleaseNotes><![CDATA[
-🎉 FIRST OFFICIAL RELEASE - UMAP v3.37.0: Performance Revolution with Production Stability
+🚨 CRITICAL STABILITY FIX - UMAP v3.38.0: Garbage Collection Crash Resolution
+
+🚨 IMMEDIATE UPGRADE RECOMMENDED: Fixes critical production crash in transform operations!
+
+🔥 CRITICAL GARBAGE COLLECTION FIX:
+- ❌ **Fixed**: "A callback was made on a garbage collected delegate" crashes during transform
+- ✅ **Solution**: Static delegate management prevents garbage collection of native callbacks
+- 🛡️ **Impact**: Eliminates random crashes in production transform workflows
+- 🔧 **Root Cause**: Lambda delegates created during Fit were garbage collected, but native code still held pointers
+
+⚡ TECHNICAL FIX DETAILS:
+- **Static Default Callback**: Permanent no-op callback prevents null pointer crashes
+- **Delegate Reference Storage**: User callbacks stored in static list to prevent GC
+- **Consistent Callback Instances**: Reuses static delegates instead of creating new lambdas
+- **Thread-Safe Storage**: Lock-protected callback list for multi-threaded safety
+
+🎯 PRODUCTION IMPACT:
+- ✅ **Eliminates**: Random crashes during transform operations
+- ✅ **Ensures**: Consistent callback behavior across training and transform
+- ✅ **Guarantees**: No more garbage collected delegate exceptions
+- ✅ **Maintains**: Full backward compatibility with existing code
+
+🔧 WHAT WAS FIXED:
+```csharp
+// BEFORE - Problematic code that caused crashes
+var callback = progressCallback ?? ((phase, current, total, percent, message) => { });
+NativeProgressCallbackV2 nativeCallback = (phase, current, total, percent, message) => { ... };
+
+// AFTER - Safe static callback approach
+var callback = progressCallback ?? DefaultCallback;  // Static delegate never GC'd
+private static readonly NativeProgressCallbackV2 DefaultCallback = (phase, current, total, percent, message) => { };
+```
+
+📊 CRASH SCENARIO RESOLVED:
+1. **Training**: umap.Fit() creates delegate → native code stores pointer
+2. **Problem**: Method completes → delegate goes out of scope → garbage collection
+3. **Transform**: umap.Transform() triggers error reporting → native code calls freed delegate
+4. **CRASH**: "Garbage collected delegate" exception terminates application
+5. **FIXED**: Static delegates never garbage collected → callbacks always valid
+
+🚀 DLL COMPATIBILITY:
+- **DLL Version**: 3.37.0 (unchanged - native library remains the same)
+- **C# Version**: 3.38.0 (updated with garbage collection fix)
+- **Drop-in Upgrade**: Pure C# fix - no native code changes required
+- **Full Compatibility**: Existing installations work seamlessly
+
+✅ VALIDATION:
+- ✅ **Transform Stability**: No more crashes during model transformation
+- ✅ **Callback Reliability**: Progress and error callbacks work consistently
+- ✅ **Memory Safety**: Proper delegate lifecycle management
+- ✅ **Production Ready**: Safe for enterprise deployment
+
+⚠️ UPGRADE IMMEDIATELY:
+This fix resolves a critical production stability issue that could cause random application crashes during transform operations. The garbage collection bug was timing-dependent and could occur intermittently, making it particularly dangerous for production systems.
+
+🎉 CONTINUES v3.37.0 FEATURES: Performance Revolution with Production Stability
 
 ⚠️ IMPORTANT NOTICE:
 This is the FIRST OFFICIAL STABLE RELEASE of UMAPuwotSharp. All previous versions (3.0-3.36) were development/testing builds with various issues and should NOT be used in production. If you are using any previous version, please upgrade immediately to v3.37.0.

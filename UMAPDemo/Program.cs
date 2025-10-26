@@ -501,11 +501,11 @@ namespace UMAPDemo
         /// <summary>
         /// Creates visualizations for the mammoth demos.
         /// </summary>
-        private static void CreateVisualizations(double[,] embedding, double[,] originalData, int[] labels, UMapModel umap, double executionTime, string[] uniqueParts, string title = null, string filename = null)
+        private static void CreateVisualizations(double[,] embedding, double[,] originalData, int[] labels, UMapModel umap, double executionTime, string[] uniqueParts, string? title = null, string? filename = null)
         {
             try
             {
-                Console.WriteLine("🎨 Creating visualizations...");
+                Console.WriteLine("Creating visualizations...");
                 string original3DPath = Path.Combine(ResultsDir, "mammoth_original_3d.png");
                 Visualizer.PlotOriginalMammoth3DReal(originalData, labels, "Original Mammoth 3D Data", original3DPath);
                 Console.WriteLine($"   ✅ Created: {Path.GetFileName(original3DPath)}");

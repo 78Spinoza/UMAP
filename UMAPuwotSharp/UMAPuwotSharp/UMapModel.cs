@@ -209,6 +209,15 @@ namespace UMAPuwotSharp
             [MarshalAs(UnmanagedType.LPStr)] string message
         );
 
+        // Static constructor to initialize default global callback and prevent garbage collection issues
+        static UMapModel()
+        {
+            // Set up a permanent default callback to prevent garbage collected delegate crashes
+            // This ensures that native code always has a valid callback to call during transform operations
+            _globalCallback = DefaultCallback;
+            CallSetGlobalCallback(DefaultCallback);
+        }
+
         // Windows P/Invoke declarations
         [DllImport(WindowsDll, CallingConvention = CallingConvention.Cdecl, EntryPoint = "uwot_create")]
         private static extern IntPtr WindowsCreate();
@@ -817,6 +826,12 @@ namespace UMAPuwotSharp
                     }
                 };
 
+                // Store reference to prevent garbage collection during transform operations
+                lock (_activeCallbacks)
+                {
+                    _activeCallbacks.Add(nativeCallback);
+                }
+
                 result = CallFitWithProgressV2(_nativeModel, flatData, (long)nSamples, (long)nFeatures, embeddingDimension, nNeighbors, minDist, spread, nEpochs, metric, embedding, nativeCallback, forceExactKnn ? 1 : 0, hnswM, hnswEfConstruction, hnswEfSearch, randomSeed, autoHNSWParam ? 1 : 0);
             }
             else
@@ -852,8 +867,8 @@ namespace UMAPuwotSharp
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int CallFitWithProgressV2(IntPtr model, float[] data, long nObs, long nDim, int embeddingDim, int nNeighbors, float minDist, float spread, int nEpochs, DistanceMetric metric, float[] embedding, NativeProgressCallbackV2? progressCallback, int forceExactKnn, int M, int efConstruction, int efSearch, int randomSeed = -1, int autoHNSWParam = 1)
         {
-            // Use null-coalescing to provide a default no-op callback if progressCallback is null
-            var callback = progressCallback ?? ((phase, current, total, percent, message) => { });
+            // Use static default callback to prevent garbage collection issues
+            var callback = progressCallback ?? DefaultCallback;
             return IsWindows ? WindowsFitWithProgressV2(model, data, nObs, nDim, embeddingDim, nNeighbors, minDist, spread, nEpochs, metric, embedding, callback, forceExactKnn, M, efConstruction, efSearch, randomSeed, autoHNSWParam)
                              : LinuxFitWithProgressV2(model, data, nObs, nDim, embeddingDim, nNeighbors, minDist, spread, nEpochs, metric, embedding, callback, forceExactKnn, M, efConstruction, efSearch, randomSeed, autoHNSWParam);
         }
@@ -1071,6 +1086,12 @@ namespace UMAPuwotSharp
             CallClearGlobalCallback();
             _globalCallback = null;
         }
+
+        // Static delegate to prevent garbage collection of the default no-op callback
+        private static readonly NativeProgressCallbackV2 DefaultCallback = (phase, current, total, percent, message) => { };
+
+        // Store references to prevent garbage collection of user callbacks
+        private static readonly List<NativeProgressCallbackV2> _activeCallbacks = new();
 
         private static NativeProgressCallbackV2? _globalCallback;
 
