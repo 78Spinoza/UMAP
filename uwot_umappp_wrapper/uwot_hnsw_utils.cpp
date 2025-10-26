@@ -347,7 +347,7 @@ namespace hnsw_utils {
             // Load HNSW from validated data stream
             hnsw_index->loadIndex(data_stream, space);
 
-            // std::cout << "[STREAM] HNSW Load: ✅ CRC32 validation passed - Stream loadIndex() completed successfully" << std::endl;
+            // std::cout << "[STREAM] HNSW Load: CRC32 validation passed - Stream loadIndex() completed successfully" << std::endl;
 
         } catch (const std::exception& e) {
             // Report HNSW load errors through callback system
