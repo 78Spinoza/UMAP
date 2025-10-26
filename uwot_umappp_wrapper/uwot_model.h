@@ -119,6 +119,7 @@ struct UwotModel {
     UwotModel() : n_vertices(0), n_dim(0), embedding_dim(2), n_neighbors(15),
         min_dist(0.1f), spread(1.0f), metric(UWOT_METRIC_EUCLIDEAN),
         is_fitted(false), force_exact_knn(false), use_normalization(false),
+        normalization_mode(1),
         // Original space statistics
         min_original_distance(0.0f), max_original_distance(0.0f), mean_original_distance(0.0f),
         std_original_distance(0.0f), p95_original_distance(0.0f), p99_original_distance(0.0f),
@@ -130,7 +131,7 @@ struct UwotModel {
         p99_embedding_distance(0.0f), mild_embedding_outlier_threshold(0.0f),
         extreme_embedding_outlier_threshold(0.0f), median_embedding_distance(0.0f),
         exact_embedding_match_threshold(1e-3f), hnsw_M(32), hnsw_ef_construction(128),
-        hnsw_ef_search(64), random_seed(-1), normalization_mode(1),
+        hnsw_ef_search(64), random_seed(-1),
         // Embedding data preservation
         always_save_embedding_data(false),
         // CRC32 validation

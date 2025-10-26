@@ -432,8 +432,8 @@ namespace UMAPDemo
                 data: floatData2,
                 progressCallback: UnifiedProgressCallback,
                 embeddingDimension: 2,
-                nNeighbors: 60,        // Updated to 60 as requested
-                minDist: 0.4f,         // Updated to 0.4 as requested
+                nNeighbors: 60,        // Optimal for large datasets
+                minDist: 0.35f,        // Updated to 0.35 as requested
                 spread: 1.0f,
                 nEpochs: 300,
                 metric: DistanceMetric.Euclidean,

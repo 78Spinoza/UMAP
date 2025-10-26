@@ -555,7 +555,8 @@ namespace transform_utils {
                     }
                 }
 
-                // DEBUG: Check if embedding array has data
+                // DEBUG: Check if embedding array has data (disabled)
+                #if 0
                 if (i == 0) {
                     bool embedding_has_data = false;
                     size_t check_count = std::min(static_cast<size_t>(10), model->embedding.size());
@@ -565,13 +566,10 @@ namespace transform_utils {
                             break;
                         }
                     }
-                    #if 0
-std::cout << "[DEBUG] Transform: Model embedding array has data: " << (embedding_has_data ? "YES" : "NO") << std::endl;
-#endif
-                    #if 0
-std::cout << "[DEBUG] Transform: Embedding array size: " << model->embedding.size() << std::endl;
-#endif
+                    std::cout << "[DEBUG] Transform: Model embedding array has data: " << (embedding_has_data ? "YES" : "NO") << std::endl;
+                    std::cout << "[DEBUG] Transform: Embedding array size: " << model->embedding.size() << std::endl;
                 }
+                #endif
 
                 // SPECTRAL INITIALIZATION OPTIMIZATION: Use spectral interpolation for better initial embedding (error4d.txt)
                 // Get initial coordinates using spectral interpolation from training embeddings

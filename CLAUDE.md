@@ -14,8 +14,9 @@ High-performance UMAP implementation with enhanced features:
 
 **ALWAYS navigate to correct folder FIRST before running batch files:**
 ```bash
-cd uwot_pure_cpp                  # ALWAYS go to the folder first!
-./BuildDockerLinuxWindows.bat     # THEN run the batch file
+cd uwot_umappp_wrapper            # ALWAYS go to the folder first!
+./BuildDockerLinuxWindows.bat     # THEN run the batch file (for Linux + Windows)
+./BuildWindowsOnly.bat            # OR for Windows-only quick builds
 ```
 
 **Why this is critical:**
@@ -28,9 +29,12 @@ cd uwot_pure_cpp                  # ALWAYS go to the folder first!
 **⚠️ CRITICAL: DLL goes directly to UMAPuwotSharp project root**
 ```bash
 # CORRECT - Copy DLL to project root
-cp "C:\UMAP\uwot_pure_cpp\build\Release\uwot.dll" "C:\UMAP\UMAPuwotSharp\UMAPuwotSharp\uwot.dll"
+cp "C:\UMAP\uwot_umappp_wrapper\build\Release\uwot.dll" "C:\UMAP\UMAPuwotSharp\UMAPuwotSharp\uwot.dll"
 
-# ❌ WRONG - Do NOT use runtimes folder
+# Linux .so file location
+cp "C:\UMAP\uwot_umappp_wrapper\build-linux\libuwot.so" "C:\UMAP\UMAPuwotSharp\UMAPuwotSharp\runtimes\linux-x64\native\libuwot.so"
+
+# ❌ WRONG - Do NOT use runtimes folder for Windows DLL
 # "C:\UMAP\UMAPuwotSharp\UMAPuwotSharp\runtimes\win-x64\native\uwot.dll"  # DOES NOT EXIST
 ```
 
@@ -46,11 +50,11 @@ dotnet test                        # Run comprehensive test suite
 
 ### C++ Native Library Development
 ```bash
-cd uwot_pure_cpp
+cd uwot_umappp_wrapper
 mkdir build && cd build
 cmake .. -DBUILD_TESTS=ON
 cmake --build . --config Release
-ctest                              # Run C++ validation tests
+ctest                              # Run C++ validation tests (if available)
 ```
 
 ## 🧪 Testing Guidelines
@@ -68,12 +72,15 @@ ctest                              # Run C++ validation tests
 
 ## 📊 Current Status
 
-**✅ COMPLETED ACHIEVEMENTS:**
-- ✅ NuGet Package v3.18.0: Phase 4 Large Dataset Support & Unified API
+**✅ COMPLETED ACHIEVEMENTS (v3.37.0):**
+- ✅ OpenMP Parallelization: 4-5x faster multi-point transforms
+- ✅ Single-Point Optimization: 12-15x speedup with stack allocation
+- ✅ Stringstream Persistence: Faster save/load (no temp files)
+- ✅ Windows DLL Stability: OpenMP cleanup prevents segfaults
 - ✅ Performance optimization with HNSW integration
 - ✅ Production safety features with 5-level outlier detection
 - ✅ AI/ML integration ready with data validation
-- ✅ 15/15 C# Tests Passing: All validation tests green
+- ✅ 14/14 C# Tests Passing: All validation tests green
 - ✅ Perfect pipeline consistency: Training embeddings match transform results
 
 ## 🚨 Build Timeouts
