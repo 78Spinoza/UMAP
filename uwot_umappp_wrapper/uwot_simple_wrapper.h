@@ -30,7 +30,7 @@ extern "C" {
 #define UWOT_ERROR_CRC_MISMATCH -7
 
 // Version information
-#define UWOT_WRAPPER_VERSION_STRING "3.38.0"
+#define UWOT_WRAPPER_VERSION_STRING "3.40.0"
 
 // Distance metrics
     typedef enum {
@@ -97,7 +97,10 @@ extern "C" {
         int ef_construction = -1,
         int ef_search = -1,
         int random_seed = -1,
-        int autoHNSWParam = 1);
+        int autoHNSWParam = 1,
+        float local_connectivity = 1.0f,
+        float bandwidth = 1.0f,
+        int use_spectral_init = -1);
 
     // Global callback management functions
     UWOT_API void uwot_set_global_callback(uwot_progress_callback_v2 callback);
@@ -147,7 +150,9 @@ extern "C" {
         UwotMetric* metric,
         int* hnsw_M,
         int* hnsw_ef_construction,
-        int* hnsw_ef_search);
+        int* hnsw_ef_search,
+        float* local_connectivity,
+        float* bandwidth);
 
     // Utility functions
     UWOT_API const char* uwot_get_error_message(int error_code);

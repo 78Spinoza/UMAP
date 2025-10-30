@@ -28,11 +28,18 @@ public:
     /**
      * @cond
      */
-    Status(internal::EpochData<Index_, Float_> epochs, Options options, const std::size_t num_dim) :
+    // STEP 3: Updated constructor to accept rho/sigma vectors
+    Status(internal::EpochData<Index_, Float_> epochs,
+           Options options,
+           const std::size_t num_dim,
+           std::vector<Float_> rhos = std::vector<Float_>(),
+           std::vector<Float_> sigmas = std::vector<Float_>()) :
         my_epochs(std::move(epochs)),
         my_options(std::move(options)),
         my_engine(my_options.optimize_seed),
-        my_num_dim(num_dim)
+        my_num_dim(num_dim),
+        my_rhos(std::move(rhos)),
+        my_sigmas(std::move(sigmas))
     {}
     /**
      * @endcond
@@ -43,6 +50,10 @@ private:
     Options my_options;
     RngEngine my_engine;
     std::size_t my_num_dim;
+
+    // STEP 1: Storage for rho/sigma values (needed for fast transform)
+    std::vector<Float_> my_rhos;
+    std::vector<Float_> my_sigmas;
 
 public:
     /**
@@ -84,6 +95,21 @@ public:
      */
     Index_ num_observations() const {
         return my_epochs.cumulative_num_edges.size() - 1;
+    }
+
+    /**
+     * STEP 2: Getters for rho/sigma values
+     * @return Vector of rho values (distance to nearest neighbor per point)
+     */
+    const std::vector<Float_>& rhos() const {
+        return my_rhos;
+    }
+
+    /**
+     * @return Vector of sigma values (bandwidth parameter per point)
+     */
+    const std::vector<Float_>& sigmas() const {
+        return my_sigmas;
     }
 
 public:

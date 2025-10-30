@@ -820,8 +820,10 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
             }
         }
 
-        // Find sigma using binary search to achieve target sum
-        double target_sum = static_cast<double>(k);  // Target sum is k neighbors
+        // CORRECTED: Use proper UMAP target (log2(k+1) * bandwidth)
+        // This matches umappp's neighbor_similarities.hpp line 129
+        const double bandwidth = 1.0;  // Standard UMAP bandwidth
+        double target_sum = std::log2(static_cast<double>(k) + 1.0) * bandwidth;
         double sigma = 1.0;
         constexpr int max_iter = 64;
         constexpr double tol = 1e-6;

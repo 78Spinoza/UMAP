@@ -49,7 +49,10 @@ extern "C" {
         int ef_construction,
         int ef_search,
         int random_seed,
-        int autoHNSWParam
+        int autoHNSWParam,
+        float local_connectivity,
+        float bandwidth,
+        int use_spectral_init
     ) {
         // Suppress unreferenced parameter warning (future functionality)
         (void)autoHNSWParam;
@@ -87,7 +90,7 @@ extern "C" {
         // Use the new umappp + HNSW implementation for better embeddings
         int result = fit_utils::uwot_fit_with_umappp_hnsw(model, data, n_obs_int, n_dim_int, embedding_dim, n_neighbors,
             min_dist, spread, n_epochs, metric, embedding, progress_callback,
-            random_seed, M, ef_construction, ef_search);
+            random_seed, M, ef_construction, ef_search, local_connectivity, bandwidth, use_spectral_init);
 
         // CRITICAL: Auto-cleanup OpenMP threads after fit completes
         // This prevents segfault during DLL unload by ensuring all threads are terminated
@@ -179,7 +182,9 @@ extern "C" {
         UwotMetric* metric,
         int* hnsw_M,
         int* hnsw_ef_construction,
-        int* hnsw_ef_search) {
+        int* hnsw_ef_search,
+        float* local_connectivity,
+        float* bandwidth) {
         if (!model) {
             return UWOT_ERROR_INVALID_PARAMS;
         }
@@ -208,6 +213,8 @@ extern "C" {
         if (hnsw_M) *hnsw_M = model->hnsw_M;
         if (hnsw_ef_construction) *hnsw_ef_construction = model->hnsw_ef_construction;
         if (hnsw_ef_search) *hnsw_ef_search = model->hnsw_ef_search;
+        if (local_connectivity) *local_connectivity = model->local_connectivity;
+        if (bandwidth) *bandwidth = model->bandwidth;
 
         return UWOT_SUCCESS;
     }

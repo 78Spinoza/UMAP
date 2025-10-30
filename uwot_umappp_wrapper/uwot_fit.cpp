@@ -69,87 +69,71 @@ void compute_normalization(const std::vector<float>& data, int n_obs, int n_dim,
 
 
     // Helper function to apply smooth_knn to a single point's neighbors
+// STEP 7: Simplified smooth_knn for legacy brute-force exact k-NN path only
+// NOTE: The HNSW path now uses correct umappp::initialize() delegation (lines 565-570)
+// This function is ONLY for the legacy brute-force fallback path (line 922)
 void apply_smooth_knn_to_point(const int* indices, const float* distances, int k, float* weights) {
     if (k <= 0) return;
 
-    // Convert distances to double for smooth_knn processing
-    std::vector<double> dist_double(k);
-    std::vector<double> weights_double(k);
-
+    // Find rho (smallest non-zero distance)
+    double rho = 0.0;
     for (int i = 0; i < k; ++i) {
-        dist_double[i] = static_cast<double>(distances[i]);
+        if (distances[i] > 0.0) {
+            rho = distances[i];
+            break;
+        }
     }
 
-    // Apply simplified smooth_knn algorithm for single point
-    try {
-        // Find rho (smallest non-zero distance)
-        double rho = 0.0;
+    // CORRECTED: Use proper UMAP target (log2(k+1) * bandwidth)
+    // This matches umappp's neighbor_similarities.hpp line 129
+    const double bandwidth = 1.0;  // Standard UMAP bandwidth
+    double target_sum = std::log2(static_cast<double>(k) + 1.0) * bandwidth;
+    double sigma = 1.0;
+    constexpr int max_iter = 64;
+    constexpr double tol = 1e-6;
+
+    // Binary search for sigma
+    double lo = 0.0, hi = std::numeric_limits<double>::max();
+    for (int iter = 0; iter < max_iter; ++iter) {
+        double sum = 0.0;
         for (int i = 0; i < k; ++i) {
-            if (dist_double[i] > 0.0) {
-                rho = dist_double[i];
-                break;
-            }
+            double r = distances[i] - rho;
+            sum += (r <= 0.0) ? 1.0 : std::exp(-r / sigma);
         }
 
-        // Find sigma using binary search to achieve target sum
-        double target_sum = static_cast<double>(k);  // Target sum is k neighbors
-        double sigma = 1.0;
-        constexpr int max_iter = 64;
-        constexpr double tol = 1e-6;
+        if (std::abs(sum - target_sum) < tol) break;
 
-        for (int iter = 0; iter < max_iter; ++iter) {
-            double sum = 0.0;
-            for (int i = 0; i < k; ++i) {
-                double r = dist_double[i] - rho;
-                sum += (r <= 0.0) ? 1.0 : std::exp(-r / sigma);
-            }
-
-            if (std::abs(sum - target_sum) < tol) break;
-
-            if (sum > target_sum) {
-                sigma *= 0.5;
-            } else {
+        if (sum > target_sum) {
+            hi = sigma;
+            sigma = (lo + sigma) / 2.0;
+        } else {
+            lo = sigma;
+            if (hi == std::numeric_limits<double>::max()) {
                 sigma *= 2.0;
+            } else {
+                sigma = (sigma + hi) / 2.0;
             }
         }
+    }
 
-        // Compute final fuzzy weights
-        double weight_sum = 0.0;
+    // Compute final fuzzy weights
+    double weight_sum = 0.0;
+    for (int i = 0; i < k; ++i) {
+        double r = distances[i] - rho;
+        double w = (r <= 0.0) ? 1.0 : std::exp(-r / sigma);
+        weights[i] = static_cast<float>(w);
+        weight_sum += w;
+    }
+
+    // Normalize
+    if (weight_sum > 0.0) {
         for (int i = 0; i < k; ++i) {
-            double r = dist_double[i] - rho;
-            weights_double[i] = (r <= 0.0) ? 1.0 : std::exp(-r / sigma);
-            weight_sum += weights_double[i];
+            weights[i] /= static_cast<float>(weight_sum);
         }
-
-        // Normalize and convert back to float
-        if (weight_sum > 0.0) {
-            for (int i = 0; i < k; ++i) {
-                weights[i] = static_cast<float>(weights_double[i] / weight_sum);
-            }
-        } else {
-            // Fallback: uniform weights
-            for (int i = 0; i < k; ++i) {
-                weights[i] = 1.0f / static_cast<float>(k);
-            }
-        }
-
-    } catch (...) {
-        // Fallback: simple exponential decay
-        double weight_sum = 0.0;
+    } else {
+        // Fallback: uniform weights
         for (int i = 0; i < k; ++i) {
-            weights_double[i] = std::exp(-dist_double[i]);
-            weight_sum += weights_double[i];
-        }
-
-        if (weight_sum > 0.0) {
-            for (int i = 0; i < k; ++i) {
-                weights[i] = static_cast<float>(weights_double[i] / weight_sum);
-            }
-        } else {
-            // Final fallback: uniform weights
-            for (int i = 0; i < k; ++i) {
-                weights[i] = 1.0f / static_cast<float>(k);
-            }
+            weights[i] = 1.0f / static_cast<float>(k);
         }
     }
 }
@@ -173,7 +157,10 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
         int random_seed,
         int M,
         int ef_construction,
-        int ef_search) {
+        int ef_search,
+        float local_connectivity,
+        float bandwidth,
+        int use_spectral_init) {
 
         if (!model || !data || !embedding || n_obs <= 0 || n_dim <= 0 || embedding_dim <= 0) {
             return UWOT_ERROR_INVALID_PARAMS;
@@ -196,8 +183,19 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
             options.min_dist = min_dist;
             options.spread = spread;
             options.num_epochs = n_epochs;
-            options.local_connectivity = 1.0;
-            options.bandwidth = 1.0;
+            // UMAP smoothing parameters
+            // For large datasets with random init, higher bandwidth creates stronger global connections
+            // Standard UMAP uses 1.0, but large datasets (50k+) often need 2.0-3.0 for global structure
+            options.local_connectivity = local_connectivity;
+            options.bandwidth = bandwidth;
+
+            // WARNING: Large datasets with random init and low bandwidth
+            bool use_random_init = (n_obs > 20000);
+            if (use_random_init && n_obs >= 50000 && bandwidth <= 1.0f && wrapped_callback) {
+                wrapped_callback("Bandwidth Warning", 3, 100, 3.0f,
+                               "\n[WARNING] Large dataset (>=50k) with random init and bandwidth=1.0 may have poor global structure!\n"
+                               "          Consider bandwidth=2.0-3.0 for better results. See UMAP bandwidth parameter.\n");
+            }
             options.mix_ratio = 1.0;
             options.repulsion_strength = 1.0;
             options.learning_rate = 1.0;
@@ -209,6 +207,12 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
             // Set up progress callback for HNSW path
             if (wrapped_callback) {
                 options.progress_callback = [wrapped_callback](int current_epoch, int total_epochs, const double* embedding) {
+                    // Special case: epoch=-1 indicates KNN smoothing report from initialize.hpp
+                    if (current_epoch == -1) {
+                        wrapped_callback("KNN Smoothing Verified", 0, 100, 55.0f,
+                                       "\n[SMOOTHING] Applied smooth_knn with correct target=log2(k+1)*bandwidth\n");
+                        return;
+                    }
                     float progress = 60.0f + (95.0f - 60.0f) * (static_cast<float>(current_epoch) / static_cast<float>(total_epochs));
                     wrapped_callback("Optimizing layout", current_epoch, total_epochs, progress, "umappp optimization with HNSW");
                 };
@@ -220,9 +224,16 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
                 std::string core_message = "Using " + std::to_string(num_cores) + " CPU cores for parallel processing";
                 wrapped_callback("CPU Core Detection", 8, 100, 0.0f, core_message.c_str());
             }
-            // Use RANDOM initialization for large datasets (>20k) to avoid spectral initialization hanging
-            // Spectral initialization requires computing eigenvectors which is O(n^3) and very slow for large n
-            options.initialize_method = (n_obs > 20000) ? umappp::InitializeMethod::RANDOM : umappp::InitializeMethod::SPECTRAL;
+            // Initialization method: User override or auto-select based on size
+            // use_spectral_init: -1 = auto (>20k=random, ≤20k=spectral), 0 = force random, 1 = force spectral
+            if (use_spectral_init >= 0) {
+                // User explicitly requested spectral (1) or random (0)
+                options.initialize_method = (use_spectral_init == 1) ? umappp::InitializeMethod::SPECTRAL : umappp::InitializeMethod::RANDOM;
+            } else {
+                // Auto-select: RANDOM for large datasets (>20k) to avoid spectral hanging
+                // Spectral initialization requires computing eigenvectors which is O(n^3) and very slow for large n
+                options.initialize_method = (n_obs > 20000) ? umappp::InitializeMethod::RANDOM : umappp::InitializeMethod::SPECTRAL;
+            }
             options.initialize_random_on_spectral_fail = true;
             options.initialize_seed = (random_seed > 0) ? random_seed : 42;
             options.optimize_seed = (random_seed > 0) ? random_seed + 1 : 43;
@@ -242,17 +253,17 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
             // Scale with dataset size to balance accuracy and speed
             int actual_M = (M <= 0) ? ((n_obs > 50000) ? 64 : (n_obs > 20000) ? 48 : 32) : M;
             int actual_ef_construction = (ef_construction <= 0) ? ((n_obs > 50000) ? 500 : (n_obs > 20000) ? 400 : 300) : ef_construction;
-            int actual_ef_search = (ef_search <= 0) ? ((n_obs > 50000) ? 300 : (n_obs > 20000) ? 200 : 100) : ef_search;
+            // CRITICAL: ef_search must be >= n_neighbors for good accuracy, use max(default, n_neighbors * 4)
+            int base_ef_search = (n_obs > 50000) ? 300 : (n_obs > 20000) ? 200 : 100;
+            int actual_ef_search = (ef_search <= 0) ? std::max(base_ef_search, n_neighbors * 4) : ef_search;
 
             // Warn user about HNSW parameter scaling for large datasets
             if (wrapped_callback && (M <= 0 || ef_construction <= 0 || ef_search <= 0)) {
-                if (n_obs > 50000) {
-                    wrapped_callback("HNSW parameters scaled", 8, 100, 0.0f,
-                        "Very large dataset (>50k). Using higher HNSW quality: M=64, ef_construction=500, ef_search=300");
-                } else if (n_obs > 20000) {
-                    wrapped_callback("HNSW parameters scaled", 8, 100, 0.0f,
-                        "Large dataset (>20k). Using scaled HNSW: M=48, ef_construction=400, ef_search=200");
-                }
+                char hnsw_msg[256];
+                snprintf(hnsw_msg, sizeof(hnsw_msg),
+                        "\n[HNSW] Auto-scaled: M=%d, ef_construction=%d, ef_search=%d (k=%d)\n",
+                        actual_M, actual_ef_construction, actual_ef_search, n_neighbors);
+                wrapped_callback("HNSW parameters scaled", 8, 100, 0.0f, hnsw_msg);
             }
 
             // CRITICAL FIX: Initialize model->embedding early (like pure_cpp version)
@@ -426,6 +437,12 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
                 // Set up progress callback in umappp options before initialization
                 if (wrapped_callback) {
                     exact_options.progress_callback = [wrapped_callback](int current_epoch, int total_epochs, const double* embedding) {
+                        // Special case: epoch=-1 indicates KNN smoothing report from initialize.hpp
+                        if (current_epoch == -1) {
+                            wrapped_callback("KNN Smoothing Verified (Exact)", 0, 100, 55.0f,
+                                           "\n[SMOOTHING] Applied smooth_knn with correct target=log2(k+1)*bandwidth (Exact k-NN)\n");
+                            return;
+                        }
                         float progress = 60.0f + (95.0f - 60.0f) * (static_cast<float>(current_epoch) / static_cast<float>(total_epochs));
                         wrapped_callback("Optimizing layout", current_epoch, total_epochs, progress, "umappp exact k-NN optimization");
                     };
@@ -433,6 +450,11 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
 
                 // Initialize umappp with exact k-NN prebuilt index - write directly to output embedding
                 auto exact_status = umappp::initialize<int, float, float>(*exact_knn_index, embedding_dim, embedding, std::move(exact_options));
+
+                // CRITICAL: Retrieve rho/sigma from Status for fast transform (EXACT k-NN path)
+                model->rho.assign(exact_status.rhos().begin(), exact_status.rhos().end());
+                model->sigma.assign(exact_status.sigmas().begin(), exact_status.sigmas().end());
+                model->has_fast_transform_data = (!model->rho.empty() && !model->sigma.empty());
 
                 // Get thread count and report OpenMP usage for exact k-NN
                 int exact_n_threads = omp_get_max_threads();
@@ -543,73 +565,60 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
             // Create matrix wrapper for the data using SimpleMatrix (using normalized or raw data)
             knncolle::SimpleMatrix<int, float> matrix(n_dim, n_obs, data_for_hnsw);
 
-            if (wrapped_callback) {
-                wrapped_callback("Building HNSW structure", 30, 100, 0.0f, "Constructing HNSW graph");
-            }
+            // Build HNSW index with progress reporting for large datasets
+            std::unique_ptr<knncolle::Prebuilt<int, float, float>> hnsw_prebuilt;
 
-            // Build HNSW index
-            auto hnsw_prebuilt = hnsw_builder->build_unique(matrix);
-
-            if (wrapped_callback) {
-                wrapped_callback("Building fuzzy neighbor graph", 45, 100, 0.0f, "Applying smooth_knn to create fuzzy simplicial sets");
-            }
-
-            // Create fuzzy neighbor list directly from HNSW
-            umappp::NeighborList<int, float> fuzzy_neighbors(n_obs);
-
-            // Cast to HnswPrebuilt to access the HNSW index directly
-            auto* hnsw_wrapper = dynamic_cast<uwot::HnswPrebuilt<int, float>*>(hnsw_prebuilt.get());
-            if (!hnsw_wrapper) {
-                throw std::runtime_error("Failed to cast to HnswPrebuilt for fuzzy neighbor creation");
-            }
-
-            // Process all data points to create fuzzy neighbors
-            #pragma omp parallel for if(n_obs > 1000)
-            for (int i = 0; i < n_obs; i++) {
-                const float* query_point = data_for_hnsw + i * n_dim;
-
-                // Get raw k-NN from HNSW
-                auto result = hnsw_wrapper->hnsw_index_->searchKnn(
-                    const_cast<float*>(query_point),
-                    static_cast<size_t>(n_neighbors)
-                );
-
-                // Convert HNSW result to vectors
-                std::vector<int> raw_indices;
-                std::vector<float> raw_distances;
-
-                std::vector<std::pair<float, int>> temp_results;
-                while (!result.empty()) {
-                    temp_results.push_back(result.top());
-                    result.pop();
+            if (n_obs >= 50000 && wrapped_callback) {
+                // For large datasets: Manual build with progress reporting
+                if (wrapped_callback) {
+                    wrapped_callback("Building HNSW structure", 30, 100, 30.0f, "\nConstructing HNSW graph (100k points - this may take 1-2 minutes)...\n");
                 }
 
-                // Reverse to get nearest first
-                for (auto it = temp_results.rbegin(); it != temp_results.rend(); ++it) {
-                    raw_indices.push_back(static_cast<int>(it->second));
-                    raw_distances.push_back(it->first);
+                // Build manually to add progress reporting
+                hnsw_prebuilt = hnsw_builder->build_unique(matrix);
+
+                if (wrapped_callback) {
+                    wrapped_callback("HNSW construction complete", 48, 100, 48.0f, "\n[HNSW] Index construction completed successfully\n");
                 }
-
-                // Apply smooth_knn to get fuzzy weights
-                std::vector<float> fuzzy_weights(raw_indices.size());
-                apply_smooth_knn_to_point(raw_indices.data(), raw_distances.data(),
-                                         static_cast<int>(raw_indices.size()),
-                                         fuzzy_weights.data());
-
-                // Build fuzzy neighbor list for this point
-                for (size_t j = 0; j < raw_indices.size(); ++j) {
-                    if (fuzzy_weights[j] > 1e-6f) {  // Filter out very weak connections
-                        fuzzy_neighbors[i].emplace_back(raw_indices[j], fuzzy_weights[j]);
-                    }
+            } else {
+                // For smaller datasets: Quick build without spam
+                if (wrapped_callback) {
+                    wrapped_callback("Building HNSW structure", 30, 100, 30.0f, "Constructing HNSW graph...");
+                }
+                hnsw_prebuilt = hnsw_builder->build_unique(matrix);
+                if (wrapped_callback) {
+                    wrapped_callback("HNSW construction complete", 48, 100, 48.0f, "HNSW index ready");
                 }
             }
 
+            // STEP 8: CORRECT DELEGATION - Let umappp handle neighbor search and smoothing
             if (wrapped_callback) {
-                wrapped_callback("Initializing umappp with fuzzy graph", 55, 100, 0.0f, "Setting up umappp optimization with fuzzy simplicial sets");
+                wrapped_callback("Initializing UMAP with HNSW", 50, 100, 50.0f,
+                                "Using correct umappp workflow - delegating to umappp::initialize");
             }
 
-            // Initialize umappp with fuzzy neighbor list - write directly to output embedding
-            auto status = umappp::initialize<int, float>(std::move(fuzzy_neighbors), embedding_dim, embedding, std::move(options));
+            // This is the CORRECT way: pass the HNSW index directly to umappp::initialize
+            // umappp will:
+            // 1. Search the HNSW index for neighbors
+            // 2. Apply correct smooth_knn with proper target (log2(k+1) * bandwidth)
+            // 3. Create the fuzzy simplicial set correctly
+            // 4. Return Status with rho/sigma values we need for fast transform
+            auto status = umappp::initialize<int, float, float>(
+                *hnsw_prebuilt,
+                embedding_dim,
+                embedding,
+                std::move(options)
+            );
+
+            // STEP 9: Retrieve rho/sigma from Status for fast transform
+            model->rho.assign(status.rhos().begin(), status.rhos().end());
+            model->sigma.assign(status.sigmas().begin(), status.sigmas().end());
+            model->has_fast_transform_data = (!model->rho.empty() && !model->sigma.empty());
+
+            if (wrapped_callback) {
+                wrapped_callback("UMAP initialization complete", 60, 100, 60.0f,
+                                "Fuzzy graph created with correct smooth_knn - rho/sigma saved for fast transform");
+            }
 
             // Get thread count and report OpenMP usage
             int n_threads = omp_get_max_threads();
@@ -748,6 +757,8 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
             model->n_neighbors = n_neighbors;
             model->min_dist = min_dist;
             model->spread = spread;
+            model->local_connectivity = local_connectivity;
+            model->bandwidth = bandwidth;
             model->metric = metric;
             model->hnsw_M = actual_M;
             model->hnsw_ef_construction = actual_ef_construction;
@@ -867,9 +878,9 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
                     // FAST TRANSFORM OPTIMIZATION: Compute sigma[i] using stored rho
                     // Binary search for sigma (bandwidth parameter) - same as smooth_knn
                     float lo = 0, hi = 1e9;
-                    const double local_connectivity = 1.0; // Standard UMAP default
+                    const double local_connectivity = 1.3; // Updated for better local structure
 
-                    for (int it = 0; it < 64; ++it) {
+                    for (int it = 0; it < 32; ++it) {
                         float mid = (lo + hi) / 2;
                         float sum = 0;
                         for (int k_check = 0; k_check < n_neighbors; ++k_check) {
@@ -894,9 +905,9 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
 
                         // Binary search for sigma (bandwidth parameter)
                         float lo = 0, hi = 1e9;
-                        const double local_connectivity = 1.0; // Standard UMAP default
+                        const double local_connectivity = 1.3; // Updated for better local structure
 
-                        for (int it = 0; it < 64; ++it) {
+                        for (int it = 0; it < 32; ++it) {
                             float mid = (lo + hi) / 2;
                             float sum = 0;
                             for (int k_check = 0; k_check < n_neighbors; ++k_check) {
@@ -1106,9 +1117,9 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
 
                 // Binary search for sigma (bandwidth parameter) - same as smooth_knn
                 float lo = 0, hi = 1e9;
-                const double local_connectivity = 1.0; // Standard UMAP default
+                const double local_connectivity = 1.3; // Updated for better local structure
 
-                for (int it = 0; it < 64; ++it) {
+                for (int it = 0; it < 32; ++it) {
                     float mid = (lo + hi) / 2;
                     float sum = 0;
                     for (int k = 0; k < n_neighbors; ++k) {

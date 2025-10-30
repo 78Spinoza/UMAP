@@ -14,6 +14,8 @@ struct UwotModel {
     int32_t n_neighbors;       // Keep int32 (rarely > 2B)
     float min_dist;
     float spread; // UMAP spread parameter (controls global scale)
+    float local_connectivity; // UMAP local connectivity (default 1.0)
+    float bandwidth; // UMAP smoothing bandwidth (default 1.0, use 2-3 for large datasets)
     UwotMetric metric;
     bool is_fitted;
     bool force_exact_knn; // Override flag to force brute-force k-NN
@@ -152,7 +154,8 @@ namespace model_utils {
     // Model information functions
     int get_model_info(UwotModel* model, int* n_vertices, int* n_dim, int* embedding_dim,
         int* n_neighbors, float* min_dist, float* spread, UwotMetric* metric,
-        int* hnsw_M, int* hnsw_ef_construction, int* hnsw_ef_search);
+        int* hnsw_M, int* hnsw_ef_construction, int* hnsw_ef_search,
+        float* local_connectivity, float* bandwidth);
 
     // Enhanced model information with dual HNSW indices
     int get_model_info_v2(UwotModel* model, int* n_vertices, int* n_dim, int* embedding_dim,

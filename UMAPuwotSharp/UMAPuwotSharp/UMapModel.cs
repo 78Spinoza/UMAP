@@ -226,7 +226,7 @@ namespace UMAPuwotSharp
         private static extern int WindowsFit(IntPtr model, float[] data, int nObs, int nDim, int embeddingDim, int nNeighbors, float minDist, float spread, int nEpochs, DistanceMetric metric, float[] embedding, int forceExactKnn);
 
         [DllImport(WindowsDll, CallingConvention = CallingConvention.Cdecl, EntryPoint = "uwot_fit_with_progress_v2")]
-        private static extern int WindowsFitWithProgressV2(IntPtr model, float[] data, long nObs, long nDim, int embeddingDim, int nNeighbors, float minDist, float spread, int nEpochs, DistanceMetric metric, float[] embedding, NativeProgressCallbackV2 progressCallback, int forceExactKnn, int M, int efConstruction, int efSearch, int randomSeed = -1, int autoHNSWParam = 1);
+        private static extern int WindowsFitWithProgressV2(IntPtr model, float[] data, long nObs, long nDim, int embeddingDim, int nNeighbors, float minDist, float spread, int nEpochs, DistanceMetric metric, float[] embedding, NativeProgressCallbackV2 progressCallback, int forceExactKnn, int M, int efConstruction, int efSearch, int randomSeed = -1, int autoHNSWParam = 1, float localConnectivity = 1.0f, float bandwidth = 1.0f, int useSpectralInit = -1);
 
         [DllImport(WindowsDll, CallingConvention = CallingConvention.Cdecl, EntryPoint = "uwot_transform")]
         private static extern int WindowsTransform(IntPtr model, float[] newData, int nNewObs, int nDim, float[] embedding);
@@ -247,7 +247,7 @@ namespace UMAPuwotSharp
         private static extern IntPtr WindowsGetErrorMessage(int errorCode);
 
         [DllImport(WindowsDll, CallingConvention = CallingConvention.Cdecl, EntryPoint = "uwot_get_model_info")]
-        private static extern int WindowsGetModelInfo(IntPtr model, out int nVertices, out int nDim, out int embeddingDim, out int nNeighbors, out float minDist, out float spread, out DistanceMetric metric, out int hnswM, out int hnswEfConstruction, out int hnswEfSearch);
+        private static extern int WindowsGetModelInfo(IntPtr model, out int nVertices, out int nDim, out int embeddingDim, out int nNeighbors, out float minDist, out float spread, out DistanceMetric metric, out int hnswM, out int hnswEfConstruction, out int hnswEfSearch, out float localConnectivity, out float bandwidth);
 
         [DllImport(WindowsDll, CallingConvention = CallingConvention.Cdecl, EntryPoint = "uwot_is_fitted")]
         private static extern int WindowsIsFitted(IntPtr model);
@@ -272,7 +272,7 @@ namespace UMAPuwotSharp
         private static extern int LinuxFit(IntPtr model, float[] data, int nObs, int nDim, int embeddingDim, int nNeighbors, float minDist, float spread, int nEpochs, DistanceMetric metric, float[] embedding, int forceExactKnn);
 
         [DllImport(LinuxDll, CallingConvention = CallingConvention.Cdecl, EntryPoint = "uwot_fit_with_progress_v2")]
-        private static extern int LinuxFitWithProgressV2(IntPtr model, float[] data, long nObs, long nDim, int embeddingDim, int nNeighbors, float minDist, float spread, int nEpochs, DistanceMetric metric, float[] embedding, NativeProgressCallbackV2 progressCallback, int forceExactKnn, int M, int efConstruction, int efSearch, int randomSeed = -1, int autoHNSWParam = 1);
+        private static extern int LinuxFitWithProgressV2(IntPtr model, float[] data, long nObs, long nDim, int embeddingDim, int nNeighbors, float minDist, float spread, int nEpochs, DistanceMetric metric, float[] embedding, NativeProgressCallbackV2 progressCallback, int forceExactKnn, int M, int efConstruction, int efSearch, int randomSeed = -1, int autoHNSWParam = 1, float localConnectivity = 1.0f, float bandwidth = 1.0f, int useSpectralInit = -1);
 
         [DllImport(LinuxDll, CallingConvention = CallingConvention.Cdecl, EntryPoint = "uwot_transform")]
         private static extern int LinuxTransform(IntPtr model, float[] newData, int nNewObs, int nDim, float[] embedding);
@@ -293,7 +293,7 @@ namespace UMAPuwotSharp
         private static extern IntPtr LinuxGetErrorMessage(int errorCode);
 
         [DllImport(LinuxDll, CallingConvention = CallingConvention.Cdecl, EntryPoint = "uwot_get_model_info")]
-        private static extern int LinuxGetModelInfo(IntPtr model, out int nVertices, out int nDim, out int embeddingDim, out int nNeighbors, out float minDist, out float spread, out DistanceMetric metric, out int hnswM, out int hnswEfConstruction, out int hnswEfSearch);
+        private static extern int LinuxGetModelInfo(IntPtr model, out int nVertices, out int nDim, out int embeddingDim, out int nNeighbors, out float minDist, out float spread, out DistanceMetric metric, out int hnswM, out int hnswEfConstruction, out int hnswEfSearch, out float localConnectivity, out float bandwidth);
 
         [DllImport(LinuxDll, CallingConvention = CallingConvention.Cdecl, EntryPoint = "uwot_is_fitted")]
         private static extern int LinuxIsFitted(IntPtr model);
@@ -315,7 +315,7 @@ namespace UMAPuwotSharp
         #region Constants
 
         // Expected DLL version - must match C++ UWOT_WRAPPER_VERSION_STRING
-        private const string EXPECTED_DLL_VERSION = "3.38.0";
+        private const string EXPECTED_DLL_VERSION = "3.40.0";
 
         #endregion
 
@@ -355,12 +355,19 @@ namespace UMAPuwotSharp
                 if (!IsFitted)
                     throw new InvalidOperationException("Model must be fitted before accessing model info");
 
-                var result = CallGetModelInfo(_nativeModel, out var nVertices, out var nDim, out var embeddingDim, out var nNeighbors, out var minDist, out var spread, out var metric, out var hnswM, out var hnswEfConstruction, out var hnswEfSearch);
+                var result = CallGetModelInfo(_nativeModel, out var nVertices, out var nDim, out var embeddingDim, out var nNeighbors, out var minDist, out var spread, out var metric, out var hnswM, out var hnswEfConstruction, out var hnswEfSearch, out var localConnectivity, out var bandwidth);
                 ThrowIfError(result);
 
-                return new UMapModelInfo(nVertices, nDim, embeddingDim, nNeighbors, minDist, spread, metric, hnswM, hnswEfConstruction, hnswEfSearch);
+                return new UMapModelInfo(nVertices, nDim, embeddingDim, nNeighbors, minDist, spread, metric, hnswM, hnswEfConstruction, hnswEfSearch, localConnectivity, bandwidth);
             }
         }
+
+        /// <summary>
+        /// Gets or sets whether to always use spectral initialization regardless of dataset size.
+        /// Default: false (auto-select based on size: >20k samples = random, ≤20k = spectral)
+        /// Set to true to force spectral initialization for large datasets (slower but may improve quality)
+        /// </summary>
+        public bool AlwaysUseSpectral { get; set; } = false;
 
         #endregion
 
@@ -509,6 +516,8 @@ namespace UMAPuwotSharp
         /// <param name="hnswEfSearch">HNSW query quality parameter. -1 = auto-scale (default: -1)</param>
                 /// <param name="randomSeed">Random seed for reproducible results (default: -1 for random seed)</param>
         /// <param name="autoHNSWParam">Automatically optimize HNSW parameters based on data size (default: true)</param>
+        /// <param name="localConnectivity">Local connectivity parameter - controls minimum distance to nearest neighbor (default: 1.0)</param>
+        /// <param name="bandwidth">Bandwidth parameter - controls fuzzy kernel width in KNN smoothing. Use 2-3 for large datasets with random init (default: 1.0)</param>
         /// <returns>Embedding coordinates [samples, embeddingDimension]</returns>
         /// <exception cref="ArgumentNullException">Thrown when data is null</exception>
         /// <exception cref="ArgumentException">Thrown when parameters are invalid</exception>
@@ -524,14 +533,16 @@ namespace UMAPuwotSharp
                           int hnswEfConstruction = -1,
                           int hnswEfSearch = -1,
                                                     int randomSeed = -1,
-                          bool autoHNSWParam = true)
+                          bool autoHNSWParam = true,
+                          float localConnectivity = 1.0f,
+                          float bandwidth = 1.0f)
         {
             // Use smart defaults based on embedding dimension
             int actualNeighbors = nNeighbors ?? CalculateOptimalNeighbors(embeddingDimension);
             float actualMinDist = minDist ?? CalculateOptimalMinDist(embeddingDimension);
             float actualSpread = spread ?? CalculateOptimalSpread(embeddingDimension);
 
-            return FitInternal(data, embeddingDimension, actualNeighbors, actualMinDist, actualSpread, nEpochs, metric, forceExactKnn, progressCallback: null, hnswM, hnswEfConstruction, hnswEfSearch, randomSeed, autoHNSWParam);
+            return FitInternal(data, embeddingDimension, actualNeighbors, actualMinDist, actualSpread, nEpochs, metric, forceExactKnn, progressCallback: null, hnswM, hnswEfConstruction, hnswEfSearch, randomSeed, autoHNSWParam, localConnectivity, bandwidth);
         }
 
         /// <summary>
@@ -548,6 +559,8 @@ namespace UMAPuwotSharp
         /// <param name="forceExactKnn">Force exact brute-force k-NN instead of HNSW approximation (default: false). Use for validation or small datasets.</param>
                 /// <param name="randomSeed">Random seed for reproducible results (default: -1 for random seed)</param>
         /// <param name="autoHNSWParam">Automatically optimize HNSW parameters based on data size (default: true)</param>
+        /// <param name="localConnectivity">Local connectivity parameter - controls minimum distance to nearest neighbor (default: 1.0)</param>
+        /// <param name="bandwidth">Bandwidth parameter - controls fuzzy kernel width in KNN smoothing. Use 2-3 for large datasets with random init (default: 1.0)</param>
         /// <returns>Embedding coordinates [samples, embeddingDimension]</returns>
         /// <exception cref="ArgumentNullException">Thrown when data or progressCallback is null</exception>
         /// <exception cref="ArgumentException">Thrown when parameters are invalid</exception>
@@ -561,7 +574,9 @@ namespace UMAPuwotSharp
                                       DistanceMetric metric = DistanceMetric.Euclidean,
                                       bool forceExactKnn = false,
                                                                             int randomSeed = -1,
-                                      bool autoHNSWParam = true)
+                                      bool autoHNSWParam = true,
+                                      float localConnectivity = 1.0f,
+                                      float bandwidth = 1.0f)
         {
             if (progressCallback == null)
                 throw new ArgumentNullException(nameof(progressCallback));
@@ -571,7 +586,7 @@ namespace UMAPuwotSharp
             float actualMinDist = minDist ?? CalculateOptimalMinDist(embeddingDimension);
             float actualSpread = spread ?? CalculateOptimalSpread(embeddingDimension);
 
-            return FitInternal(data, embeddingDimension, actualNeighbors, actualMinDist, actualSpread, nEpochs, metric, forceExactKnn, progressCallback, hnswM: -1, hnswEfConstruction: -1, hnswEfSearch: -1, randomSeed, autoHNSWParam);
+            return FitInternal(data, embeddingDimension, actualNeighbors, actualMinDist, actualSpread, nEpochs, metric, forceExactKnn, progressCallback, hnswM: -1, hnswEfConstruction: -1, hnswEfSearch: -1, randomSeed, autoHNSWParam, localConnectivity, bandwidth);
         }
 
         /// <summary>
@@ -773,7 +788,9 @@ namespace UMAPuwotSharp
                                    int hnswEfConstruction = -1,
                                    int hnswEfSearch = -1,
                                                                       int randomSeed = -1,
-                                   bool autoHNSWParam = true)
+                                   bool autoHNSWParam = true,
+                                   float localConnectivity = 1.0f,
+                                   float bandwidth = 1.0f)
         {
             if (data == null)
                 throw new ArgumentNullException(nameof(data));
@@ -832,13 +849,13 @@ namespace UMAPuwotSharp
                     _activeCallbacks.Add(nativeCallback);
                 }
 
-                result = CallFitWithProgressV2(_nativeModel, flatData, (long)nSamples, (long)nFeatures, embeddingDimension, nNeighbors, minDist, spread, nEpochs, metric, embedding, nativeCallback, forceExactKnn ? 1 : 0, hnswM, hnswEfConstruction, hnswEfSearch, randomSeed, autoHNSWParam ? 1 : 0);
+                result = CallFitWithProgressV2(_nativeModel, flatData, (long)nSamples, (long)nFeatures, embeddingDimension, nNeighbors, minDist, spread, nEpochs, metric, embedding, nativeCallback, forceExactKnn ? 1 : 0, hnswM, hnswEfConstruction, hnswEfSearch, randomSeed, autoHNSWParam ? 1 : 0, localConnectivity, bandwidth, AlwaysUseSpectral ? 1 : 0);
             }
             else
             {
                 // CRITICAL FIX: Always use unified pipeline function (even without progress callback)
                 // to ensure HNSW and exact use same normalized data - prevents MSE ~74 issue
-                result = CallFitWithProgressV2(_nativeModel, flatData, (long)nSamples, (long)nFeatures, embeddingDimension, nNeighbors, minDist, spread, nEpochs, metric, embedding, null, forceExactKnn ? 1 : 0, hnswM, hnswEfConstruction, hnswEfSearch, randomSeed, autoHNSWParam ? 1 : 0);
+                result = CallFitWithProgressV2(_nativeModel, flatData, (long)nSamples, (long)nFeatures, embeddingDimension, nNeighbors, minDist, spread, nEpochs, metric, embedding, null, forceExactKnn ? 1 : 0, hnswM, hnswEfConstruction, hnswEfSearch, randomSeed, autoHNSWParam ? 1 : 0, localConnectivity, bandwidth, AlwaysUseSpectral ? 1 : 0);
             }
 
             ThrowIfError(result);
@@ -865,12 +882,12 @@ namespace UMAPuwotSharp
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int CallFitWithProgressV2(IntPtr model, float[] data, long nObs, long nDim, int embeddingDim, int nNeighbors, float minDist, float spread, int nEpochs, DistanceMetric metric, float[] embedding, NativeProgressCallbackV2? progressCallback, int forceExactKnn, int M, int efConstruction, int efSearch, int randomSeed = -1, int autoHNSWParam = 1)
+        private static int CallFitWithProgressV2(IntPtr model, float[] data, long nObs, long nDim, int embeddingDim, int nNeighbors, float minDist, float spread, int nEpochs, DistanceMetric metric, float[] embedding, NativeProgressCallbackV2? progressCallback, int forceExactKnn, int M, int efConstruction, int efSearch, int randomSeed = -1, int autoHNSWParam = 1, float localConnectivity = 1.0f, float bandwidth = 1.0f, int useSpectralInit = -1)
         {
             // Use static default callback to prevent garbage collection issues
             var callback = progressCallback ?? DefaultCallback;
-            return IsWindows ? WindowsFitWithProgressV2(model, data, nObs, nDim, embeddingDim, nNeighbors, minDist, spread, nEpochs, metric, embedding, callback, forceExactKnn, M, efConstruction, efSearch, randomSeed, autoHNSWParam)
-                             : LinuxFitWithProgressV2(model, data, nObs, nDim, embeddingDim, nNeighbors, minDist, spread, nEpochs, metric, embedding, callback, forceExactKnn, M, efConstruction, efSearch, randomSeed, autoHNSWParam);
+            return IsWindows ? WindowsFitWithProgressV2(model, data, nObs, nDim, embeddingDim, nNeighbors, minDist, spread, nEpochs, metric, embedding, callback, forceExactKnn, M, efConstruction, efSearch, randomSeed, autoHNSWParam, localConnectivity, bandwidth, useSpectralInit)
+                             : LinuxFitWithProgressV2(model, data, nObs, nDim, embeddingDim, nNeighbors, minDist, spread, nEpochs, metric, embedding, callback, forceExactKnn, M, efConstruction, efSearch, randomSeed, autoHNSWParam, localConnectivity, bandwidth, useSpectralInit);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -914,10 +931,10 @@ namespace UMAPuwotSharp
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int CallGetModelInfo(IntPtr model, out int nVertices, out int nDim, out int embeddingDim, out int nNeighbors, out float minDist, out float spread, out DistanceMetric metric, out int hnswM, out int hnswEfConstruction, out int hnswEfSearch)
+        private static int CallGetModelInfo(IntPtr model, out int nVertices, out int nDim, out int embeddingDim, out int nNeighbors, out float minDist, out float spread, out DistanceMetric metric, out int hnswM, out int hnswEfConstruction, out int hnswEfSearch, out float localConnectivity, out float bandwidth)
         {
-            return IsWindows ? WindowsGetModelInfo(model, out nVertices, out nDim, out embeddingDim, out nNeighbors, out minDist, out spread, out metric, out hnswM, out hnswEfConstruction, out hnswEfSearch)
-                             : LinuxGetModelInfo(model, out nVertices, out nDim, out embeddingDim, out nNeighbors, out minDist, out spread, out metric, out hnswM, out hnswEfConstruction, out hnswEfSearch);
+            return IsWindows ? WindowsGetModelInfo(model, out nVertices, out nDim, out embeddingDim, out nNeighbors, out minDist, out spread, out metric, out hnswM, out hnswEfConstruction, out hnswEfSearch, out localConnectivity, out bandwidth)
+                             : LinuxGetModelInfo(model, out nVertices, out nDim, out embeddingDim, out nNeighbors, out minDist, out spread, out metric, out hnswM, out hnswEfConstruction, out hnswEfSearch, out localConnectivity, out bandwidth);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1190,11 +1207,21 @@ namespace UMAPuwotSharp
         public int HnswEfSearch { get; }
 
         /// <summary>
+        /// Gets the local connectivity parameter (controls minimum distance to nearest neighbor, default 1.0)
+        /// </summary>
+        public float LocalConnectivity { get; }
+
+        /// <summary>
+        /// Gets the bandwidth parameter (controls fuzzy kernel width in KNN smoothing, default 1.0, use 2-3 for large datasets)
+        /// </summary>
+        public float Bandwidth { get; }
+
+        /// <summary>
         /// Gets the human-readable name of the distance metric
         /// </summary>
         public string MetricName => UMapModel.GetMetricName(Metric);
 
-        internal UMapModelInfo(int trainingSamples, int inputDimension, int outputDimension, int neighbors, float minimumDistance, float spread, DistanceMetric metric, int hnswM, int hnswEfConstruction, int hnswEfSearch)
+        internal UMapModelInfo(int trainingSamples, int inputDimension, int outputDimension, int neighbors, float minimumDistance, float spread, DistanceMetric metric, int hnswM, int hnswEfConstruction, int hnswEfSearch, float localConnectivity, float bandwidth)
         {
             TrainingSamples = trainingSamples;
             InputDimension = inputDimension;
@@ -1206,6 +1233,8 @@ namespace UMAPuwotSharp
             HnswM = hnswM;
             HnswEfConstruction = hnswEfConstruction;
             HnswEfSearch = hnswEfSearch;
+            LocalConnectivity = localConnectivity;
+            Bandwidth = bandwidth;
         }
 
         /// <summary>

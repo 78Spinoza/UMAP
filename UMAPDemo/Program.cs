@@ -53,6 +53,9 @@ namespace UMAPDemo
                 // Run hairy mammoth min_dist experiments (45 neighbors fixed) - DISABLED
                // DemoHairyMammothMinDistExperiments(data, labels);
 
+                // Run hairy mammoth bandwidth experiments (45 neighbors, local_connectivity=1.3 fixed) - ENABLED
+                DemoHairyMammothBandwidthExperiments(data, labels);
+
                 // Run MNIST demo
                 RunMnistDemo();
 
@@ -404,7 +407,7 @@ namespace UMAPDemo
 
             // 100k hairy mammoth dataset
             int availableSamples = data.GetLength(0);
-            int requestedSamples = 100000;  // 100k dataset for comprehensive testing
+            int requestedSamples = 100000;  // 100k dataset for flagship demo
 
             if (availableSamples < requestedSamples)
             {
@@ -432,10 +435,10 @@ namespace UMAPDemo
                 data: floatData2,
                 progressCallback: UnifiedProgressCallback,
                 embeddingDimension: 2,
-                nNeighbors: 120,       // Updated to 120 for detailed mammoth structure
-                minDist: 0.4f,         // Updated to 0.4 as requested
-                spread: 2.0f,          // Updated to 2.0 as requested
-                nEpochs: 300,
+                nNeighbors: 80,        // Higher k for better global structure with 100k points
+                minDist: 0.35f,        // As requested - was 0.4 before
+                spread: 1.0f,          // Standard UMAP value (buggy double-smoothing needed higher values)
+                nEpochs: 500,          // More epochs for random init to converge
                 metric: DistanceMetric.Euclidean,
                 forceExactKnn: false,
                 autoHNSWParam: false,   // Using false to prevent automatic override
@@ -475,8 +478,8 @@ namespace UMAPDemo
             Console.WriteLine("   Creating 2D visualizations of UMAP embedding...");
 
             var sampleCount = doubleEmbedding2.GetLength(0);
-            // Create parameter info with execution time
-            var paramInfo = CreateFitParamInfo(umap, stopwatch.Elapsed.TotalSeconds, "Hairy_Mammoth_100K");
+            // Create parameter info with execution time and epochs
+            var paramInfo = CreateFitParamInfo(umap, stopwatch.Elapsed.TotalSeconds, "Hairy_Mammoth_100K", nEpochs: 500);
             paramInfo["dataset"] = "Hairy Mammoth 100K";
             paramInfo["embedding_quality"] = "Anatomically optimized";
 
@@ -535,7 +538,7 @@ namespace UMAPDemo
         /// <summary>
         /// Creates parameter info dictionary from model info (essential FIT parameters only).
         /// </summary>
-        private static Dictionary<string, object> CreateFitParamInfo(UMapModel model, double executionTime, string experimentType = "")
+        private static Dictionary<string, object> CreateFitParamInfo(UMapModel model, double executionTime, string experimentType = "", int nEpochs = -1)
         {
             var modelInfo = model.ModelInfo;
             return new Dictionary<string, object>
@@ -547,6 +550,9 @@ namespace UMAPDemo
                 ["distance_metric"] = modelInfo.Metric.ToString(),
                 ["min_dist"] = modelInfo.MinimumDistance.ToString("F2"),
                 ["spread"] = modelInfo.Spread.ToString("F2"),
+                ["local_connectivity"] = modelInfo.LocalConnectivity.ToString("F1"),
+                ["bandwidth"] = modelInfo.Bandwidth.ToString("F1"),
+                ["n_epochs"] = nEpochs > 0 ? nEpochs.ToString() : "N/A", // Include epochs if provided
                 ["negative_sample_rate"] = "N/A", // UMAP doesn't have this parameter
                 ["transform_seed"] = "N/A", // UMAP doesn't expose this
                 ["data_points"] = modelInfo.TrainingSamples,
@@ -573,6 +579,7 @@ namespace UMAPDemo
 UMAP v{version} | Sample: {modelInfo.TrainingSamples:N0} | {knnMode}
 k={modelInfo.Neighbors} | {modelInfo.Metric} | dims={modelInfo.OutputDimension}
 min_dist={modelInfo.MinimumDistance:F2} | spread={modelInfo.Spread:F2}
+local_connectivity={modelInfo.LocalConnectivity:F1} | bandwidth={modelInfo.Bandwidth:F1}
 HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.HnswEfSearch}";
         }
 
@@ -1250,6 +1257,127 @@ HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.
             {
                 var marker = result.minDist == bestResult.minDist ? "🏆" : "  ";
                 Console.WriteLine($"   {marker}{result.minDist,-8:F2} | {result.quality,-7:F4} | {result.time,-8:F2}");
+            }
+        }
+
+        /// <summary>
+        /// Runs hairy mammoth bandwidth experiments with fixed neighbors and local connectivity.
+        /// Tests bandwidth from 1.0 to 2.8 in increments of 0.2 for the hairy mammoth dataset.
+        /// </summary>
+        private static void DemoHairyMammothBandwidthExperiments(double[,] data, int[] labels)
+        {
+            Console.WriteLine("🦣 Running Hairy Mammoth Bandwidth Experiments...");
+            Console.WriteLine("   Testing bandwidth from 1.0 to 2.8 (increments of 0.2) with n_neighbors=45, local_connectivity=1.3");
+
+            // Load hairy mammoth data (use 50k subset)
+            string csvPath = Path.Combine(DataDir, HairyMammothDataFile);
+            if (!File.Exists(csvPath))
+            {
+                Console.WriteLine($"   ⚠️ Hairy mammoth data file not found: {csvPath}");
+                return;
+            }
+
+            var (hairyData, hairyLabels, hairyUniqueParts) = DataLoaders.LoadMammothWithLabels(csvPath);
+            Console.WriteLine($"   Loaded: {hairyData.GetLength(0)} points, {hairyData.GetLength(1)} dimensions");
+
+            // Use 50k samples for comprehensive testing
+            int availableSamples = hairyData.GetLength(0);
+            int requestedSamples = 50000;
+
+            if (availableSamples < requestedSamples)
+            {
+                Console.WriteLine($"   ⚠️ Warning: Only {availableSamples:N0} samples available, using all instead of {requestedSamples:N0}");
+                requestedSamples = availableSamples;
+            }
+
+            Console.WriteLine($"   Processing {requestedSamples:N0} hairy mammoth points for bandwidth experiments...");
+            var (data2, labels2) = DataLoaders.SampleRandomPoints(hairyData, hairyLabels, requestedSamples);
+            Console.WriteLine($"   Subsampled: {data2.GetLength(0)} points, {data2.GetLength(1)} dimensions");
+
+            // Convert double[,] to float[,] for UMAP API
+            int nSamples = data2.GetLength(0);
+            int nFeatures = data2.GetLength(1);
+            var floatData = new float[nSamples, nFeatures];
+            for (int i = 0; i < nSamples; i++)
+                for (int j = 0; j < nFeatures; j++)
+                    floatData[i, j] = (float)data2[i, j];
+
+            // Test bandwidth values from 1.0 to 2.8 in increments of 0.2
+            var bandwidthTests = new[] { 1.0f, 1.2f, 1.4f, 1.6f, 1.8f, 2.0f, 2.2f, 2.4f, 2.8f };
+            var results = new List<(float bandwidth, double[,] embedding, double time, double quality)>();
+
+            Console.WriteLine($"   🔍 Testing 9 bandwidth values with n_neighbors=45, local_connectivity=1.3...");
+
+            foreach (var bandwidth in bandwidthTests)
+            {
+                Console.WriteLine($"   📊 Testing bandwidth = {bandwidth:F1} (n_neighbors=45, local_connectivity=1.3)...");
+                var model = new UMapModel();
+
+                var stopwatch = Stopwatch.StartNew();
+                var embedding = model.FitWithProgress(
+                    data: floatData,
+                    progressCallback: CreatePrefixedCallback($"BW={bandwidth:F1}"),
+                    embeddingDimension: 2,
+                    nNeighbors: 45,
+                    minDist: 0.35f,
+                    spread: 1.0f,
+                    nEpochs: 300,
+                    metric: DistanceMetric.Euclidean,
+                    forceExactKnn: false,
+                    autoHNSWParam: false,
+                    randomSeed: 42,
+                    localConnectivity: 1.3f,
+                    bandwidth: bandwidth
+                );
+                stopwatch.Stop();
+
+                // Convert float[,] embedding back to double[,] for compatibility
+                int embedSamples = embedding.GetLength(0);
+                int embedDims = embedding.GetLength(1);
+                var doubleEmbedding = new double[embedSamples, embedDims];
+                for (int i = 0; i < embedSamples; i++)
+                    for (int j = 0; j < embedDims; j++)
+                        doubleEmbedding[i, j] = embedding[i, j];
+
+                double quality = CalculateEmbeddingQuality(doubleEmbedding, labels2);
+                results.Add((bandwidth, doubleEmbedding, stopwatch.Elapsed.TotalSeconds, quality));
+                Console.WriteLine($"   ✅ bandwidth={bandwidth:F1}: quality={quality:F4}, time={stopwatch.Elapsed.TotalSeconds:F2}s");
+
+                // Create visualization for all bandwidth tests
+                var paramInfo = CreateFitParamInfo(model, stopwatch.Elapsed.TotalSeconds, "Hairy_Mammoth_Bandwidth_Experiments");
+                paramInfo["n_neighbors"] = "45";
+                paramInfo["min_dist"] = "0.35";
+                paramInfo["local_connectivity"] = "1.3";
+                paramInfo["bandwidth"] = bandwidth.ToString("F1");
+                paramInfo["dataset"] = "Hairy Mammoth 50k";
+                paramInfo["embedding_quality"] = quality.ToString("F4");
+
+                var experimentDir = Path.Combine(ResultsDir, "hairy_mammoth_bandwidth_experiments");
+                Directory.CreateDirectory(experimentDir);
+                var imageNumber = Array.IndexOf(bandwidthTests, bandwidth) + 1;
+                var outputPath = Path.Combine(experimentDir, $"{imageNumber:D2}_hairy_bandwidth_{bandwidth:F1}.png");
+                var title = $"Hairy Mammoth Bandwidth Experiment: k=45, local_connectivity=1.3, bandwidth={bandwidth:F1}\n" + BuildVisualizationTitle(model, "Hairy Mammoth Bandwidth");
+                Visualizer.PlotMammothUMAP(doubleEmbedding, labels2, title, outputPath, paramInfo, autoFitAxes: true, partNames: hairyUniqueParts);
+                Console.WriteLine($"      📈 Saved: {Path.GetFileName(outputPath)}");
+            }
+
+            // Analysis and Summary
+            Console.WriteLine("\n📊 === Hairy Mammoth Bandwidth Experiments Summary ===");
+            var bestResult = results.OrderBy(r => r.quality).First();
+            Console.WriteLine($"🏆 Best bandwidth: {bestResult.bandwidth:F1} (quality: {bestResult.quality:F4})");
+            Console.WriteLine($"📈 Quality range: {results.Min(r => r.quality):F4} - {results.Max(r => r.quality):F4}");
+            Console.WriteLine($"⏱️ Time range: {results.Min(r => r.time):F2}s - {results.Max(r => r.time):F2}s");
+
+            Console.WriteLine($"\n📁 Results saved to: {Path.Combine(ResultsDir, "hairy_mammoth_bandwidth_experiments")}");
+
+            // Show detailed results table
+            Console.WriteLine("\n📊 Detailed Results:");
+            Console.WriteLine("   bandwidth | Quality | Time (s)");
+            Console.WriteLine("   ---------|---------|----------");
+            foreach (var result in results.OrderBy(r => r.bandwidth))
+            {
+                var marker = result.bandwidth == bestResult.bandwidth ? "🏆" : "  ";
+                Console.WriteLine($"   {marker}{result.bandwidth,-8:F1} | {result.quality,-7:F4} | {result.time,-8:F2}");
             }
         }
 

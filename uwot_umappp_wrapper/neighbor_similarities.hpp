@@ -45,20 +45,33 @@ struct NeighborSimilaritiesOptions {
     int num_threads = 1;
 };
 
-template<bool use_newton_ = 
+// STEP 4: Modified to optionally capture rho/sigma values
+template<bool use_newton_ =
 #ifndef UMAPPP_R_PACKAGE_TESTING
 true
 #else
 false
 #endif
 , typename Index_, typename Float_>
-void neighbor_similarities(NeighborList<Index_, Float_>& x, const NeighborSimilaritiesOptions<Float_>& options) {
+void neighbor_similarities(NeighborList<Index_, Float_>& x,
+                          const NeighborSimilaritiesOptions<Float_>& options,
+                          std::vector<Float_>* rhos_out = nullptr,
+                          std::vector<Float_>* sigmas_out = nullptr) {
     // 'raw_connect_index' is the 1-based index of the first non-identical neighbor that is assumed to always be connected.
     // This can also be fractional in which case the threshold distance is defined by interpolation.
     const Index_ raw_connect_index = sanisizer::from_float<Index_>(options.local_connectivity);
     const Float_ interpolation = options.local_connectivity - raw_connect_index;
 
     const Index_ npoints = x.size();
+
+    // STEP 4: Initialize output vectors if requested
+    if (rhos_out) {
+        rhos_out->resize(npoints, 0);
+    }
+    if (sigmas_out) {
+        sigmas_out->resize(npoints, 1);
+    }
+
     parallelize(options.num_threads, npoints, [&](const int, const Index_ start, const Index_ length) -> void {
         std::vector<Float_> active_delta;
 
@@ -92,6 +105,11 @@ void neighbor_similarities(NeighborList<Index_, Float_>& x, const NeighborSimila
             const Float_ lower = (connect_index > 0 ? all_neighbors[connect_index - 1].second : static_cast<Float_>(0)); // 'connect_index' is 1-based, hence the subtraction.
             const Float_ upper = all_neighbors[connect_index].second;
             const Float_ rho = lower + interpolation * (upper - lower);
+
+            // STEP 4: Capture rho value
+            if (rhos_out) {
+                (*rhos_out)[i] = rho;
+            }
 
             // Pre-computing the difference between each distance and rho to reduce work in the inner iterations.
             active_delta.clear();
@@ -192,6 +210,11 @@ void neighbor_similarities(NeighborList<Index_, Float_>& x, const NeighborSimila
             }
             mean_dist /= num_neighbors;
             sigma = std::max(options.min_k_dist_scale * mean_dist, sigma);
+
+            // STEP 4: Capture sigma value
+            if (sigmas_out) {
+                (*sigmas_out)[i] = sigma;
+            }
 
             const Float_ invsigma = 1 / sigma;
             for (Index_ k = 0; k < num_neighbors; ++k) {

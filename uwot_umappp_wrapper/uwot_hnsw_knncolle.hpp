@@ -203,7 +203,7 @@ private:
     // Concrete implementation that stores the matrix data
     class EuclideanHnswPrebuilt : public HnswPrebuilt<Index_, Float_> {
     private:
-        std::vector<Float_> data_;  // Store copy of the data
+        const Float_* data_ptr_;  // Store pointer to original data (no copy)
         Index_ num_obs_;
         std::size_t num_dim_;
 
@@ -216,17 +216,13 @@ private:
             const knncolle::SimpleMatrix<Index_, Float_>& matrix
         ) : HnswPrebuilt<Index_, Float_>(hnsw_index, space, num_obs, num_dim),
             num_obs_(num_obs), num_dim_(num_dim) {
-            // Copy data from matrix using extractor
-            data_.resize(static_cast<size_t>(num_obs) * num_dim);
+            // Get pointer to original data - no copying needed
             auto extractor = matrix.new_extractor();
-            for (Index_ i = 0; i < num_obs; ++i) {
-                const Float_* obs = extractor->next();
-                std::copy(obs, obs + num_dim, data_.begin() + i * num_dim);
-            }
+            data_ptr_ = extractor->next();
         }
 
         const Float_* get_observation(Index_ i) const override {
-            return data_.data() + i * num_dim_;
+            return data_ptr_ + i * num_dim_;
         }
     };
 };
@@ -247,9 +243,9 @@ public:
         hnswlib::SpaceInterface<Float_>* dist_space = nullptr;
         hnswlib::HierarchicalNSW<Float_>* hnsw_graph = nullptr;
 
-        // Use InnerProductSpace for cosine similarity
-        // Note: hnswlib returns -dot_product, so distances are negative
-        dist_space = new hnswlib::InnerProductSpace(num_dim);
+        // Use custom CosineSpace for correct cosine distance calculation
+        // CosineSpace returns negative dot product so HNSW can minimize it
+        dist_space = new CosineSpace(num_dim);
         hnsw_graph = new hnswlib::HierarchicalNSW<Float_>(dist_space, num_obs, this->M_, this->ef_construction_);
 
         // Extract data using the new iterator pattern
@@ -270,7 +266,7 @@ private:
     // Concrete implementation for Cosine distance
     class CosineHnswPrebuilt : public HnswPrebuilt<Index_, Float_> {
     private:
-        std::vector<Float_> data_;
+        const Float_* data_ptr_;  // Store pointer to original data (no copy)
         Index_ num_obs_;
         std::size_t num_dim_;
 
@@ -283,17 +279,13 @@ private:
             const knncolle::SimpleMatrix<Index_, Float_>& matrix
         ) : HnswPrebuilt<Index_, Float_>(hnsw_index, space, num_obs, num_dim),
             num_obs_(num_obs), num_dim_(num_dim) {
-            // Copy data from matrix
-            data_.resize(static_cast<size_t>(num_obs) * num_dim);
+            // Get pointer to original data - no copying needed
             auto extractor = matrix.new_extractor();
-            for (Index_ i = 0; i < num_obs; ++i) {
-                const Float_* obs = extractor->next();
-                std::copy(obs, obs + num_dim, data_.begin() + i * num_dim);
-            }
+            data_ptr_ = extractor->next();
         }
 
         const Float_* get_observation(Index_ i) const override {
-            return data_.data() + i * num_dim_;
+            return data_ptr_ + i * num_dim_;
         }
     };
 };
@@ -314,10 +306,9 @@ public:
         hnswlib::SpaceInterface<Float_>* dist_space = nullptr;
         hnswlib::HierarchicalNSW<Float_>* hnsw_graph = nullptr;
 
-        // Use L1 space for Manhattan distance
-        // Note: hnswlib doesn't have built-in L1, so we fall back to L2 for now
-        // TODO: Implement custom L1Space if needed
-        dist_space = new hnswlib::L2Space(num_dim);
+        // Use custom L1Space for correct Manhattan distance calculation
+        // L1Space computes sum of absolute differences (L1 norm)
+        dist_space = new L1Space(num_dim);
         hnsw_graph = new hnswlib::HierarchicalNSW<Float_>(dist_space, num_obs, this->M_, this->ef_construction_);
 
         // Extract data using the new iterator pattern
@@ -338,7 +329,7 @@ private:
     // Concrete implementation for Manhattan distance
     class ManhattanHnswPrebuilt : public HnswPrebuilt<Index_, Float_> {
     private:
-        std::vector<Float_> data_;
+        const Float_* data_ptr_;  // Store pointer to original data (no copy)
         Index_ num_obs_;
         std::size_t num_dim_;
 
@@ -351,17 +342,13 @@ private:
             const knncolle::SimpleMatrix<Index_, Float_>& matrix
         ) : HnswPrebuilt<Index_, Float_>(hnsw_index, space, num_obs, num_dim),
             num_obs_(num_obs), num_dim_(num_dim) {
-            // Copy data from matrix
-            data_.resize(static_cast<size_t>(num_obs) * num_dim);
+            // Get pointer to original data - no copying needed
             auto extractor = matrix.new_extractor();
-            for (Index_ i = 0; i < num_obs; ++i) {
-                const Float_* obs = extractor->next();
-                std::copy(obs, obs + num_dim, data_.begin() + i * num_dim);
-            }
+            data_ptr_ = extractor->next();
         }
 
         const Float_* get_observation(Index_ i) const override {
-            return data_.data() + i * num_dim_;
+            return data_ptr_ + i * num_dim_;
         }
     };
 };

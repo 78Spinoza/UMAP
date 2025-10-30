@@ -21,7 +21,8 @@ namespace model_utils {
 
     int get_model_info(UwotModel* model, int* n_vertices, int* n_dim, int* embedding_dim,
         int* n_neighbors, float* min_dist, float* spread, UwotMetric* metric,
-        int* hnsw_M, int* hnsw_ef_construction, int* hnsw_ef_search) {
+        int* hnsw_M, int* hnsw_ef_construction, int* hnsw_ef_search,
+        float* local_connectivity, float* bandwidth) {
 
         if (!model) {
             return UWOT_ERROR_INVALID_PARAMS;
@@ -37,6 +38,8 @@ namespace model_utils {
         if (hnsw_M) *hnsw_M = model->hnsw_M;
         if (hnsw_ef_construction) *hnsw_ef_construction = model->hnsw_ef_construction;
         if (hnsw_ef_search) *hnsw_ef_search = model->hnsw_ef_search;
+        if (local_connectivity) *local_connectivity = model->local_connectivity;
+        if (bandwidth) *bandwidth = model->bandwidth;
 
         return UWOT_SUCCESS;
     }

@@ -191,6 +191,8 @@ namespace persistence_utils {
             endian_utils::write_value(file, model->n_neighbors);
             endian_utils::write_value(file, model->min_dist);
             endian_utils::write_value(file, model->spread);
+            endian_utils::write_value(file, model->local_connectivity);
+            endian_utils::write_value(file, model->bandwidth);
             endian_utils::write_value(file, static_cast<int>(model->metric));
 
             // HNSW parameters
@@ -376,7 +378,8 @@ namespace persistence_utils {
             // Basic parameters
             auto read = [&file](auto& v) { return endian_utils::read_value(file, v); };
             if (!read(model->n_vertices) || !read(model->n_dim) || !read(model->embedding_dim) ||
-                !read(model->n_neighbors) || !read(model->min_dist) || !read(model->spread)) {
+                !read(model->n_neighbors) || !read(model->min_dist) || !read(model->spread) ||
+                !read(model->local_connectivity) || !read(model->bandwidth)) {
                 throw std::runtime_error("Failed to read basic parameters");
             }
 
@@ -405,9 +408,14 @@ namespace persistence_utils {
                 };
 
             if (model->has_fast_transform_data) {
-                size_t rho_size = 0, sigma_size = 0;
-                if (!read(rho_size) || !read(sigma_size)) throw std::runtime_error("Failed to read rho/sigma sizes");
+                // CRITICAL: Read rho_size, then rho values, then sigma_size, then sigma values
+                // Must match the SAVE format (not reading both sizes together!)
+                size_t rho_size = 0;
+                if (!read(rho_size)) throw std::runtime_error("Failed to read rho size");
                 read_vec_float(model->rho, rho_size);
+
+                size_t sigma_size = 0;
+                if (!read(sigma_size)) throw std::runtime_error("Failed to read sigma size");
                 read_vec_float(model->sigma, sigma_size);
             }
             else {
