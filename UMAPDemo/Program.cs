@@ -442,7 +442,9 @@ namespace UMAPDemo
                 metric: DistanceMetric.Euclidean,
                 forceExactKnn: false,
                 autoHNSWParam: false,   // Using false to prevent automatic override
-                randomSeed: 42
+                randomSeed: 42,
+                localConnectivity: 1.3f,
+                bandwidth: 3.2f
             );
 
 

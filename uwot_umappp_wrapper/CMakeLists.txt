@@ -18,7 +18,7 @@ set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON CACHE BOOL "Suppress developer warnings
 FetchContent_Declare(
   eigen
   GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-  GIT_TAG 3.4.0
+  GIT_TAG 960892ca1399c1ac4dce3793f283f08d0874cf43
 )
 
 FetchContent_Declare(
