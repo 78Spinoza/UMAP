@@ -430,6 +430,7 @@ namespace UMAPDemo
                     floatData2[i, j] = (float)data2[i, j];
 
             var umap = new UMapModel();
+            umap.AlwaysUseSpectral = true;  // Enable spectral initialization for better quality
             var stopwatch = Stopwatch.StartNew();
             var embedding = umap.FitWithProgress(
                 data: floatData2,
@@ -443,8 +444,8 @@ namespace UMAPDemo
                 forceExactKnn: false,
                 autoHNSWParam: false,   // Using false to prevent automatic override
                 randomSeed: 42,
-                localConnectivity: 1.3f,
-                bandwidth: 3.2f
+                localConnectivity: 2.0f,
+                bandwidth: 4.0f
             );
 
 
@@ -1264,12 +1265,12 @@ HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.
 
         /// <summary>
         /// Runs hairy mammoth bandwidth experiments with fixed neighbors and local connectivity.
-        /// Tests bandwidth from 1.0 to 2.8 in increments of 0.2 for the hairy mammoth dataset.
+        /// Tests bandwidth from 2.0 to 4.0 in increments of 0.25 for the hairy mammoth dataset.
         /// </summary>
         private static void DemoHairyMammothBandwidthExperiments(double[,] data, int[] labels)
         {
             Console.WriteLine("🦣 Running Hairy Mammoth Bandwidth Experiments...");
-            Console.WriteLine("   Testing bandwidth from 1.0 to 2.8 (increments of 0.2) with n_neighbors=45, local_connectivity=1.3");
+            Console.WriteLine("   Testing bandwidth from 2.0 to 4.0 (increments of 0.25) with n_neighbors=60, local_connectivity=2.0, spread=1.5");
 
             // Load hairy mammoth data (use 50k subset)
             string csvPath = Path.Combine(DataDir, HairyMammothDataFile);
@@ -1304,31 +1305,32 @@ HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.
                 for (int j = 0; j < nFeatures; j++)
                     floatData[i, j] = (float)data2[i, j];
 
-            // Test bandwidth values from 1.0 to 2.8 in increments of 0.2
-            var bandwidthTests = new[] { 1.0f, 1.2f, 1.4f, 1.6f, 1.8f, 2.0f, 2.2f, 2.4f, 2.8f };
+            // Test bandwidth values from 2.0 to 4.0 in increments of 0.25
+            var bandwidthTests = new[] { 2.0f, 2.25f, 2.5f, 2.75f, 3.0f, 3.25f, 3.5f, 3.75f, 4.0f };
             var results = new List<(float bandwidth, double[,] embedding, double time, double quality)>();
 
-            Console.WriteLine($"   🔍 Testing 9 bandwidth values with n_neighbors=45, local_connectivity=1.3...");
+            Console.WriteLine($"   🔍 Testing 9 bandwidth values with n_neighbors=60, local_connectivity=2.0, spread=1.5...");
 
             foreach (var bandwidth in bandwidthTests)
             {
-                Console.WriteLine($"   📊 Testing bandwidth = {bandwidth:F1} (n_neighbors=45, local_connectivity=1.3)...");
+                Console.WriteLine($"   📊 Testing bandwidth = {bandwidth:F1} (n_neighbors=60, local_connectivity=2.0, spectral init)...");
                 var model = new UMapModel();
+                model.AlwaysUseSpectral = true;  // Enable spectral initialization for best quality
 
                 var stopwatch = Stopwatch.StartNew();
                 var embedding = model.FitWithProgress(
                     data: floatData,
                     progressCallback: CreatePrefixedCallback($"BW={bandwidth:F1}"),
                     embeddingDimension: 2,
-                    nNeighbors: 45,
+                    nNeighbors: 60,
                     minDist: 0.35f,
-                    spread: 1.0f,
+                    spread: 1.5f,
                     nEpochs: 300,
                     metric: DistanceMetric.Euclidean,
                     forceExactKnn: false,
                     autoHNSWParam: false,
                     randomSeed: 42,
-                    localConnectivity: 1.3f,
+                    localConnectivity: 2.0f,
                     bandwidth: bandwidth
                 );
                 stopwatch.Stop();

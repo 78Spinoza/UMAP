@@ -87,9 +87,6 @@ namespace persistence_utils {
             }
 
             // Security validation (following PacMap pattern)
-            const uint32_t max_decompressed_size = MAX_DECOMPRESSED_SIZE;
-            const uint32_t max_compressed_size = MAX_COMPRESSED_SIZE;
-
             if (uncompressed_size > MAX_DECOMPRESSED_SIZE) {
                 throw std::runtime_error("HNSW uncompressed size too large (potential corruption)");
             }

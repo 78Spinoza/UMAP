@@ -127,7 +127,7 @@ void optimize_layout(
     Float_ initial_alpha,
     Rng_& rng,
     int epoch_limit,
-    std::function<void(int, int, const double*)> progress_callback = nullptr
+    std::function<void(int, int, const void*)> progress_callback = nullptr
 ) {
     auto& n = setup.current_epoch;
     const auto num_epochs = setup.total_epochs;
@@ -363,7 +363,7 @@ void optimize_layout_parallel(
     Rng_& rng,
     const int epoch_limit,
     const int nthreads,
-    std::function<void(int, int, const double*)> progress_callback = nullptr
+    std::function<void(int, int, const void*)> progress_callback = nullptr
 ) {
 #ifndef UMAPPP_NO_PARALLEL_OPTIMIZATION
     auto& n = setup.current_epoch;

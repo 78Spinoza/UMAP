@@ -18,7 +18,7 @@ set(CMAKE_SUPPRESS_DEVELOPER_WARNINGS ON CACHE BOOL "Suppress developer warnings
 FetchContent_Declare(
   eigen
   GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-  GIT_TAG 3.4.0
+  GIT_TAG master
 )
 
 FetchContent_Declare(
@@ -56,8 +56,25 @@ FetchContent_MakeAvailable(eigen)
 FetchContent_MakeAvailable(aarand)
 FetchContent_MakeAvailable(sanisizer)
 FetchContent_MakeAvailable(subpar)
-FetchContent_MakeAvailable(irlba)
-FetchContent_MakeAvailable(knncolle)
+
+# Disable install/export for header-only libraries to fix CMake error on Linux
+# These libraries try to export Eigen but Eigen is header-only and not exportable
+set(EIGEN_BUILD_PKGCONFIG OFF CACHE BOOL "Don't build Eigen pkgconfig" FORCE)
+set(INSTALL_DISABLE ON CACHE BOOL "Disable all install commands" FORCE)
+set(CMAKE_SKIP_INSTALL_RULES ON CACHE BOOL "Skip install rules" FORCE)
+
+# Fetch irlba and knncolle without install rules
+FetchContent_GetProperties(irlba)
+if(NOT irlba_POPULATED)
+    FetchContent_Populate(irlba)
+    add_subdirectory(${irlba_SOURCE_DIR} ${irlba_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
+
+FetchContent_GetProperties(knncolle)
+if(NOT knncolle_POPULATED)
+    FetchContent_Populate(knncolle)
+    add_subdirectory(${knncolle_SOURCE_DIR} ${knncolle_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
 
 # Find and enable OpenMP for parallel optimization
 find_package(OpenMP)
@@ -123,6 +140,8 @@ endif()
 
 # Compiler-specific optimizations and warning suppression
 if(MSVC)
+    # MSVC conformance flags for Eigen 3.4 branch compatibility
+    add_compile_options(/permissive- /Zc:__cplusplus /Zc:preprocessor)
     # High warning level for our code, but suppress unrelated warnings
     target_compile_options(uwot_umappp PRIVATE /W4 /O2 /fp:fast)
     # Suppress external library warnings for clean build
@@ -136,6 +155,7 @@ if(MSVC)
     target_compile_options(uwot_umappp PRIVATE /wd4245)  # signed/unsigned mismatch
     target_compile_options(uwot_umappp PRIVATE /wd4505)  # unreferenced function
     target_compile_options(uwot_umappp PRIVATE /wd4714)  # optimization related
+    # Using Eigen 3.4 branch with MSVC 19.44 fixes - no workaround needed
 else()
     # Maximum performance optimizations for GCC/Clang
     target_compile_options(uwot_umappp PRIVATE -Wall -Wextra -O3 -march=native -ffast-math)

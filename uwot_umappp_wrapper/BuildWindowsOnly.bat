@@ -4,7 +4,7 @@ chcp 65001 >nul 2>&1
 
 echo ===========================================
 echo   Building REAL UMAPPP Windows Version Only
-echo     (Visual Studio 2022 - No Docker)
+echo     (MSYS2 GCC - Bypasses MSVC Issues)
 echo ===========================================
 echo.
 
@@ -23,10 +23,12 @@ mkdir build
 cd build
 
 echo.
-echo Configuring REAL UMAPPP with CMake...
+echo Configuring REAL UMAPPP with CMake using MSYS2 GCC...
+echo   - Bypasses MSVC JacobiSVD compilation issues
 echo   - libscran/umappp reference implementation
 echo   - Spectral initialization for complex 3D structures
-cmake .. -G "Visual Studio 17 2022" -A x64 -DBUILD_SHARED_LIBS=ON -DBUILD_TESTS=ON
+echo   - Full performance with GCC + Eigen 3.4.0
+"C:\msys64\mingw64.exe" /usr/bin/bash -lc "cd /c/UMAP/uwot_umappp_wrapper/build && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++"
 if %ERRORLEVEL% NEQ 0 (
     echo ERROR: CMake configuration failed!
     pause
@@ -34,8 +36,8 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo.
-echo Building Release version...
-cmake --build . --config Release
+echo Building Release version with GCC...
+"C:\msys64\mingw64.exe" /usr/bin/bash -lc "cd /c/UMAP/uwot_umappp_wrapper/build && make -j$(nproc)"
 if %ERRORLEVEL% NEQ 0 (
     echo ERROR: Build failed!
     pause
