@@ -47,22 +47,22 @@ namespace UMAPDemo
                 Run10kMammothTransformDemo(data, labels, uniqueParts);
                 CreateFlagship100KHairyMammoth();
 
-                // Run advanced parameter tuning (UMAP version) - ENABLED
-                DemoAdvancedParameterTuning(data, labels);
+                // Run advanced parameter tuning (UMAP version) - DISABLED
+                // DemoAdvancedParameterTuning(data, labels);
 
                 // Run hairy mammoth min_dist experiments (45 neighbors fixed) - DISABLED
                // DemoHairyMammothMinDistExperiments(data, labels);
 
-                // Run hairy mammoth bandwidth experiments (45 neighbors, local_connectivity=1.3 fixed) - ENABLED
-                DemoHairyMammothBandwidthExperiments(data, labels);
+                // Run hairy mammoth bandwidth experiments (45 neighbors, local_connectivity=1.3 fixed) - DISABLED
+                // DemoHairyMammothBandwidthExperiments(data, labels);
 
                 // Run MNIST demo
                 RunMnistDemo();
 
-                // Run MNIST parameter tuning
+                // Run MNIST parameter tuning - ENABLED
                 MnistDemo.RunMnistParameterTuning();
 
-                // Run MNIST min_dist experiments (40 neighbors, vary min_dist 0.05-2.0)
+                // Run MNIST min_dist experiments (40 neighbors, vary min_dist 0.05-2.0) - ENABLED
                 MnistDemo.RunMnistMinDistExperiments();
 
                 // Run transform consistency tests (PacMap-specific - disabled for UMAP)
@@ -393,7 +393,7 @@ namespace UMAPDemo
         /// </summary>
         private static void CreateFlagship100KHairyMammoth()
         {
-            Console.WriteLine("🦣 Running Flagship 70k Hairy Mammoth Demo...");
+            Console.WriteLine("🦣 Running Flagship 1M Hairy Mammoth Demo...");
             string csvPath = Path.Combine(DataDir, HairyMammothDataFile);
             if (!File.Exists(csvPath))
             {
@@ -405,17 +405,11 @@ namespace UMAPDemo
 
             Console.WriteLine($"   Loaded: {data.GetLength(0)} points, {data.GetLength(1)} dimensions");
 
-            // 100k hairy mammoth dataset
+            // FULL hairy mammoth dataset (~1M samples)
             int availableSamples = data.GetLength(0);
-            int requestedSamples = 100000;  // 100k dataset for flagship demo
+            int requestedSamples = availableSamples;  // Use ALL available samples
 
-            if (availableSamples < requestedSamples)
-            {
-                Console.WriteLine($"   ⚠️ Warning: Only {availableSamples:N0} samples available, using all instead of {requestedSamples:N0}");
-                requestedSamples = availableSamples;
-            }
-
-            Console.WriteLine($"   Processing FULL {requestedSamples:N0} points for UMAP (200k FLAGSHIP DEMO)...");
+            Console.WriteLine($"   Processing FULL {requestedSamples:N0} points for UMAP (~1M FLAGSHIP DEMO)...");
             var (data2, labels2) = DataLoaders.SampleRandomPoints(data, labels, requestedSamples);
             Console.WriteLine($"   Subsampled: {data2.GetLength(0)} points, {data2.GetLength(1)} dimensions");
 

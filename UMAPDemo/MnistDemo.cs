@@ -166,10 +166,12 @@ namespace UMAPDemo
 
                 // Create 2D embedding using helper function and save model + timing
                 var (umap, fitTime, epochsUsed) = CreateMnistEmbeddingWithModel(doubleData, labels,
-                    nNeighbors: 100,          // Updated to 100 as requested
-                    minDist: 0.2f,            // Updated to 0.2 as requested
-                    spread: 1.0f,             // Updated to 1.0 as requested
-                    name: "mnist_2d_embedding", folderName: "", directKNN: false);
+                    nNeighbors: 100,          // Keep current value
+                    minDist: 0.1f,            // Updated to 0.1 as requested
+                    spread: 1.0f,             // Keep current value
+                    name: "mnist_2d_embedding", folderName: "", directKNN: false,
+                    localConnectivity: 2.0f,  // Updated to 2.0 as requested
+                    bandwidth: 4.0f);         // Updated to 4.0 as requested
 
                 Console.WriteLine();
                 Console.WriteLine("🔄 UMAP embedding completed successfully!");
@@ -321,7 +323,7 @@ namespace UMAPDemo
         /// <summary>
         /// Helper function to create MNIST embedding with specified parameters and return the fitted model + fit time
         /// </summary>
-        private static (UMapModel model, double fitTime, int epochsUsed) CreateMnistEmbeddingWithModel(double[,] data, byte[] labels, int nNeighbors, float minDist, float spread, string name, string folderName = "", bool directKNN = false)
+        private static (UMapModel model, double fitTime, int epochsUsed) CreateMnistEmbeddingWithModel(double[,] data, byte[] labels, int nNeighbors, float minDist, float spread, string name, string folderName = "", bool directKNN = false, float localConnectivity = 1.0f, float bandwidth = 1.0f)
         {
             string knnType = directKNN ? "Direct KNN" : "HNSW";
             Console.WriteLine($"🚀 Creating {name} embedding (k={nNeighbors}, min_dist={minDist:F2}, spread={spread:F2}, KNN={knnType})...");
@@ -351,7 +353,9 @@ namespace UMAPDemo
                 metric: DistanceMetric.Euclidean,
                 forceExactKnn: directKNN,
                 autoHNSWParam: data.GetLength(0) >= 50000,  // Auto-optimize HNSW for large datasets
-                randomSeed: 42
+                randomSeed: 42,
+                localConnectivity: localConnectivity,
+                bandwidth: bandwidth
             );
 
             stopwatch.Stop();
@@ -597,7 +601,9 @@ min_dist={modelInfo.MinimumDistance:F2} | spread={modelInfo.Spread:F2} | epochs=
                     metric: DistanceMetric.Euclidean,
                     forceExactKnn: false,
                     autoHNSWParam: false,
-                    randomSeed: 42
+                    randomSeed: 42,
+                    localConnectivity: 2.0f,
+                    bandwidth: 4.0f
                 );
                 testStopwatch.Stop();
 
@@ -623,8 +629,10 @@ min_dist={modelInfo.MinimumDistance:F2} | spread={modelInfo.Spread:F2} | epochs=
                     // Get actual model parameters - NO HARDCODING!
                     var modelInfo = model.ModelInfo;
                     var actualMinDist = modelInfo.MinimumDistance;
+                    var actualLocalConnectivity = modelInfo.LocalConnectivity;
+                    var actualBandwidth = modelInfo.Bandwidth;
 
-                    var title = $"MNIST n_neighbors Experiment: k={nNeighbors}, min_dist={actualMinDist:F2}\nUMAP MNIST {doubleData.GetLength(0):N0} samples | k={nNeighbors} | min_dist={actualMinDist:F2}";
+                    var title = $"MNIST n_neighbors Experiment: k={nNeighbors}, min_dist={actualMinDist:F2}, local_conn={actualLocalConnectivity:F1}, bandwidth={actualBandwidth:F1}\nUMAP MNIST {doubleData.GetLength(0):N0} samples | k={modelInfo.Neighbors} | min_dist={actualMinDist:F2} | local_conn={actualLocalConnectivity:F1} | bandwidth={actualBandwidth:F1}";
                     CreateMnistParameterPlot(doubleEmbedding, intLabels, title, outputPath, nNeighbors, actualMinDist, quality, testStopwatch.Elapsed.TotalSeconds);
                     Console.WriteLine($"      📈 Saved: {Path.GetFileName(outputPath)} (actual min_dist={actualMinDist:F2})");
                 }
@@ -654,7 +662,9 @@ min_dist={modelInfo.MinimumDistance:F2} | spread={modelInfo.Spread:F2} | epochs=
                     metric: DistanceMetric.Euclidean,
                     forceExactKnn: false,
                     autoHNSWParam: false,
-                    randomSeed: 42
+                    randomSeed: 42,
+                    localConnectivity: 2.0f,
+                    bandwidth: 4.0f
                 );
                 testStopwatch.Stop();
 
@@ -675,7 +685,8 @@ min_dist={modelInfo.MinimumDistance:F2} | spread={modelInfo.Spread:F2} | epochs=
                 Directory.CreateDirectory(experimentDir2);
                 var imageNumber = Array.IndexOf(minDistTests, minDist) + 1;
                 var outputPath2 = Path.Combine(experimentDir2, $"{imageNumber:D2}_mnist_mindist_{minDist:F2}.png");
-                var title2 = $"MNIST min_dist Experiment: k={model.ModelInfo.Neighbors}, min_dist={model.ModelInfo.MinimumDistance:F2}\nUMAP MNIST {doubleData.GetLength(0):N0} samples | k={model.ModelInfo.Neighbors} | min_dist={model.ModelInfo.MinimumDistance:F2}";
+                var modelInfo2 = model.ModelInfo;
+                var title2 = $"MNIST min_dist Experiment: k={modelInfo2.Neighbors}, min_dist={modelInfo2.MinimumDistance:F2}, local_conn={modelInfo2.LocalConnectivity:F1}, bandwidth={modelInfo2.Bandwidth:F1}\nUMAP MNIST {doubleData.GetLength(0):N0} samples | k={modelInfo2.Neighbors} | min_dist={modelInfo2.MinimumDistance:F2} | local_conn={modelInfo2.LocalConnectivity:F1} | bandwidth={modelInfo2.Bandwidth:F1}";
                 CreateMnistParameterPlot(doubleEmbedding, intLabels, title2, outputPath2, MNIST_EXPERIMENT_NEIGHBORS_BASE, minDist, quality, testStopwatch.Elapsed.TotalSeconds);
                 Console.WriteLine($"      📈 Saved: {Path.GetFileName(outputPath2)}");
             }
@@ -937,7 +948,9 @@ min_dist={modelInfo.MinimumDistance:F2} | spread={modelInfo.Spread:F2} | epochs=
                     metric: DistanceMetric.Euclidean,
                     forceExactKnn: false,
                     autoHNSWParam: false,
-                    randomSeed: 42
+                    randomSeed: 42,
+                    localConnectivity: 2.0f,
+                    bandwidth: 4.0f
                 );
                 testStopwatch.Stop();
 
@@ -960,7 +973,8 @@ min_dist={modelInfo.MinimumDistance:F2} | spread={modelInfo.Spread:F2} | epochs=
                     Directory.CreateDirectory(experimentDir);
                     var imageNumber = (minDistTests.IndexOf(minDist) / 10) + 1;
                     var outputPath = Path.Combine(experimentDir, $"{imageNumber:D2}_mnist_mindist_{minDist:F2}.png");
-                    var title = $"MNIST min_dist Experiment: k={model.ModelInfo.Neighbors}, min_dist={minDist:F2}\nUMAP MNIST {doubleData.GetLength(0):N0} samples | k={model.ModelInfo.Neighbors} | min_dist={minDist:F2}";
+                    var modelInfo3 = model.ModelInfo;
+                    var title = $"MNIST min_dist Experiment: k={modelInfo3.Neighbors}, min_dist={modelInfo3.MinimumDistance:F2}, local_conn={modelInfo3.LocalConnectivity:F1}, bandwidth={modelInfo3.Bandwidth:F1}\nUMAP MNIST {doubleData.GetLength(0):N0} samples | k={modelInfo3.Neighbors} | min_dist={modelInfo3.MinimumDistance:F2} | local_conn={modelInfo3.LocalConnectivity:F1} | bandwidth={modelInfo3.Bandwidth:F1}";
                     CreateMnistParameterPlot(doubleEmbedding, intLabels, title, outputPath, 40, minDist, quality, testStopwatch.Elapsed.TotalSeconds);
                     Console.WriteLine($"      📈 Saved: {Path.GetFileName(outputPath)}");
                 }
