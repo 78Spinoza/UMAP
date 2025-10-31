@@ -46,7 +46,7 @@ Furthermore if you increase your number of observation even if you found a good 
 ![Mammuth02](Other/hairy_mammoth_bandwidth_animation.gif)
 
 Fine tuned parameters give pretty good result for 100k subsample 
-![Mammuth03](Other/hairy_mammoth_100k_2d_B.png)
+![Mammuth03](Other/hairy_mammoth_100k_2d_D.png)
 
 But for full 1M set data the global structure is totally off. 
 ![Mammuth04](Other/hairy_mammoth_1M_2d.png)

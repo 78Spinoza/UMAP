@@ -401,7 +401,7 @@ namespace UMAPDemo
                 var title = $@"MNIST 2D Embedding (UMAP)
 UMAP v{version} | Sample: {embedding.GetLength(0):N0} | {knnMode} | Time: {timeUnit}
 k={modelInfo.Neighbors} | {modelInfo.Metric} | dims={modelInfo.OutputDimension} | seed=42
-min_dist={modelInfo.MinimumDistance:F2} | spread={modelInfo.Spread:F2} | epochs={epochsUsed} | HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.HnswEfSearch}";
+min_dist={modelInfo.MinimumDistance:F2} | spread={modelInfo.Spread:F2} | local_conn={modelInfo.LocalConnectivity:F1} | bandwidth={modelInfo.Bandwidth:F1} | epochs={epochsUsed} | HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.HnswEfSearch}";
 
                 var plotModel = new PlotModel
                 {

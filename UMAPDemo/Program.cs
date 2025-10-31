@@ -59,11 +59,11 @@ namespace UMAPDemo
                 // Run MNIST demo
                 RunMnistDemo();
 
-                // Run MNIST parameter tuning - ENABLED
-                MnistDemo.RunMnistParameterTuning();
+                // Run MNIST parameter tuning - DISABLED
+                // MnistDemo.RunMnistParameterTuning();
 
-                // Run MNIST min_dist experiments (40 neighbors, vary min_dist 0.05-2.0) - ENABLED
-                MnistDemo.RunMnistMinDistExperiments();
+                // Run MNIST min_dist experiments (40 neighbors, vary min_dist 0.05-2.0) - DISABLED
+                // MnistDemo.RunMnistMinDistExperiments();
 
                 // Run transform consistency tests (PacMap-specific - disabled for UMAP)
                // RunTransformConsistencyTests(data, labels);
@@ -405,11 +405,11 @@ namespace UMAPDemo
 
             Console.WriteLine($"   Loaded: {data.GetLength(0)} points, {data.GetLength(1)} dimensions");
 
-            // FULL hairy mammoth dataset (~1M samples)
+            // LARGE hairy mammoth dataset (200k samples instead of 1M)
             int availableSamples = data.GetLength(0);
-            int requestedSamples = availableSamples;  // Use ALL available samples
+            int requestedSamples = 200000;  // Use 200k samples instead of all
 
-            Console.WriteLine($"   Processing FULL {requestedSamples:N0} points for UMAP (~1M FLAGSHIP DEMO)...");
+            Console.WriteLine($"   Processing {requestedSamples:N0} points for UMAP (200k LARGE-SCALE DEMO)...");
             var (data2, labels2) = DataLoaders.SampleRandomPoints(data, labels, requestedSamples);
             Console.WriteLine($"   Subsampled: {data2.GetLength(0)} points, {data2.GetLength(1)} dimensions");
 
