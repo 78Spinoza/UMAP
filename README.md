@@ -45,6 +45,12 @@ Furthermore if you increase your number of observation even if you found a good 
 
 ![Mammuth02](Other/hairy_mammoth_bandwidth_animation.gif)
 
+Fine tuned parameters give pretty good result for 100k subsample 
+![Mammuth03](Other/hairy_mammoth_100k_2d_B.png)
+
+But for full 1M set data the global structure is totally off. 
+![Mammuth04](Other/hairy_mammoth_1M_2d.png)
+
 
 all of the above images are generated with our current library using the C# DEMO (data included in the project). One another this that is 
 very important is that 99% of the global structure comes from doing an inital Spectral initialization using graph Laplacian eigenvectors an time consuming and for some dataset unstable effort. If we start from random points the outcome of UMAP is terrible specially for larger data sets.  This leaves us with tuning at least four hyperparams and using a good initilization method to get good results. 
