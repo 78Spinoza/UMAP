@@ -31,7 +31,7 @@ This implementation addresses these fundamental gaps by providing complete model
 ## Hyperparameters and UMAP 
 
 UMAP has several very sensetive hyper parameters namely: mind distance (dist), nr of neibours (k), 
- localConnectivity (lC), bandwidth (usually 1 and inaccessable) and spread.   The last 3 are very important if you have a large dataset and want to have a good global structure.   For example look at our 3D Mamoth 1M data set that is 2d projected and subs reandom sampled below: 
+ localConnectivity (lC), bandwidth (usually 1 and inaccessable) and spread.   The last 3 are very important if you have a large dataset and want to have a good global structure.   For example look at our 3D Mamoth 1M data set that is 2d projected and subrandom sampled below: 
 
 ![Mammuth3d](Other/MamuRender.PNG)
 ![Mammuth3d](Other/mamutOriginal.PNG)
