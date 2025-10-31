@@ -103,9 +103,13 @@ add_library(uwot_umappp SHARED
     lz4.c
 )
 
-# Include directories
+# Include directories - our code
 target_include_directories(uwot_umappp PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+# Include external libraries as SYSTEM to suppress their warnings
+target_include_directories(uwot_umappp SYSTEM PRIVATE
     ${aarand_SOURCE_DIR}/include
     ${sanisizer_SOURCE_DIR}/include
     ${subpar_SOURCE_DIR}/include

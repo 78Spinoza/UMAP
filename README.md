@@ -106,22 +106,29 @@ BuildDockerLinuxWindows.bat # Builds both Windows + Linux with Docker
 
 **Note**: The C# API remains identical, so existing code continues to work but now benefits from superior umappp algorithms and all advanced features.
 
-## 🎉 **Latest Update v3.40.0** - Spectral Initialization & Hyperparameter Integration
+## 🎉 **Latest Update v3.40.0** - Initialization API Enhancement & Spectral Default
 
-**ADVANCED ALGORITHMS RELEASE: Force spectral initialization + bandwidth/localConnectivity integration + Eigen compilation fix + hairy mammoth bandwidth sweep!**
+**INITIALIZATION API ENHANCEMENT: New InitializationMethod enum + spectral default + improved API clarity!**
 
-✅ **AlwaysUseSpectral Property**: Force spectral initialization for any dataset size (solves mammoth fragmentation!)
-✅ **Eigen Compilation Fix**: Resolved Eigen 3.4.0/3.4.1 MSVC errors and 5.0.1-dev performance regression
-✅ **Hyperparameter Integration**: LocalConnectivity & Bandwidth now exposed in C# API with ModelInfo
-✅ **Bandwidth Sweep Testing**: Comprehensive bandwidth experiments [1.0-2.8] for hairy mammoth dataset
-✅ **Enhanced Visualization Titles**: All image titles now include LocalConnectivity & Bandwidth from ModelInfo
-✅ **Spectral Quality Boost**: Better manifold preservation for complex 3D structures
-✅ **Production Ready**: All features tested and validated with 14/15 tests passing
+✅ **InitializationMethod Enum**: Clear, explicit control over initialization strategy (Auto=-1, Random=0, Spectral=1)
+✅ **Spectral Default**: Spectral initialization now the default for best quality embeddings
+✅ **API Clarity**: Replaced confusing `AlwaysUseSpectral` boolean with clearer `InitMethod` property
+✅ **Backward Compatibility**: Obsolete `AlwaysUseSpectral` property maintained for existing code
+✅ **Enhanced Demo**: Updated bandwidth experiments with optimal parameters (spread=2.0, local_connectivity=2.0)
+✅ **Dynamic Metadata**: All visualizations use model-extracted parameters (no hardcoded values)
+✅ **Compiler Warnings Fixed**: Clean compilation with zero warnings (unused variables, type conversions)
+✅ **Production Ready**: All features tested and validated with clean builds
 
 **🔧 Critical Eigen Fix:**
 - **Problem**: Eigen library compilation failure blocking spectral initialization
 - **Solution**: Found Eigen commit 960892ca1 (Feb 2024 JacobiSVD refactor)
 - **Result**: ✅ Compiles successfully with MSVC, ✅ NO performance regression (2-5s tests)
+
+**Previous v3.39.0 Features:**
+✅ **AlwaysUseSpectral Property**: Force spectral initialization for any dataset size (now improved with enum)
+✅ **Eigen Compilation Fix**: Resolved Eigen 3.4.0/3.4.1 MSVC errors and performance regression
+✅ **Hyperparameter Integration**: LocalConnectivity & Bandwidth exposed in C# API with ModelInfo
+✅ **Bandwidth Sweep Testing**: Comprehensive bandwidth experiments for optimal parameter discovery
 
 **Previous v3.37.0 Features:**
 ✅ **OpenMP Parallelization**: 4-5x faster transforms with multi-threaded processing
@@ -533,53 +540,71 @@ The stream-based HNSW serialization with CRC32 validation is fully implemented a
 
 ## Enhanced Features
 
-### 🌟 **NEW: AlwaysUseSpectral Property - Force Spectral Initialization**
-**Solve mammoth fragmentation and boost embedding quality for any dataset size!**
+### 🌟 **NEW: InitializationMethod Enum - Clear Control Over Initialization**
+**Explicit, type-safe control over UMAP initialization strategy with spectral as default!**
 
 ```csharp
-// NEW: Force spectral initialization for any dataset size
+using UMAPuwotSharp;
+
+// NEW v3.40.0: InitializationMethod enum for clear API
 var model = new UMapModel();
-model.AlwaysUseSpectral = true;  // Override auto-detection and always use spectral init
+
+// Spectral initialization (DEFAULT - best quality)
+model.InitMethod = InitializationMethod.Spectral;  // Explicit control
+
+// Or use Auto mode (size-based selection)
+model.InitMethod = InitializationMethod.Auto;  // ≤20k: Spectral, >20k: Random
+
+// Or force Random (fast but lower quality)
+model.InitMethod = InitializationMethod.Random;  // Fast initialization
 
 var embedding = model.FitWithProgress(
     data: complex3DData,
-    progressCallback: progress => Console.WriteLine($"Spectral init: {progress.Message}"),
+    progressCallback: progress => Console.WriteLine($"Init: {progress.Message}"),
     embeddingDimension: 2,
     nNeighbors: 80,
     minDist: 0.35f,
-    localConnectivity: 1.3f,   // Works with spectral initialization
-    bandwidth: 3.2f            // Enhanced kernel density estimation
+    localConnectivity: 1.3f,   // Fuzzy simplicial set parameter
+    bandwidth: 3.2f            // Kernel density estimation bandwidth
 );
 
 // Benefits:
+// ✅ Clear, explicit API with enum instead of confusing boolean
+// ✅ Spectral DEFAULT: Best quality embeddings out-of-the-box
 // ✅ Manifold-aware starting positions using graph Laplacian eigenvectors
 // ✅ Better preservation of complex 3D structures (solves mammoth fragmentation!)
 // ✅ Superior topology preservation for non-linear manifolds
-// ✅ Higher quality embeddings for visualization and ML pipelines
 // ⚠️ Slower initialization (spectral O(n²) vs random O(n)) but worth the quality gain
 ```
 
-**Auto-Detection Behavior:**
-- **Small datasets** (≤20k samples): Automatically uses spectral initialization
-- **Large datasets** (>20k samples): Automatically uses random initialization (for speed)
-- **Override option**: Set `AlwaysUseSpectral = true` to force spectral for any size
+**InitializationMethod Options:**
+- **Spectral (1)**: High-quality manifold-aware initialization (DEFAULT)
+- **Auto (-1)**: Automatic selection based on dataset size (≤20k: Spectral, >20k: Random)
+- **Random (0)**: Fast random initialization (lower quality for large datasets)
 
-**⚠️ CRITICAL INSIGHT: Why AlwaysUseSpectral is Essential for Large Datasets**
+**Backward Compatibility:**
+```csharp
+// OLD API still works (marked obsolete)
+model.AlwaysUseSpectral = true;   // Equivalent to: model.InitMethod = InitializationMethod.Spectral
+model.AlwaysUseSpectral = false;  // Equivalent to: model.InitMethod = InitializationMethod.Auto
+```
+
+**⚠️ CRITICAL INSIGHT: Why Spectral Initialization is Essential for Large Datasets**
 
 **The Random Initialization Problem with Large Observation Data (>20k):**
 
 UMAP with random initialization **cannot preserve global structure intact** for large datasets regardless of hyperparameter tuning. This is a fundamental limitation:
 
 ```csharp
-// Random initialization (default for >20k samples) - BROKEN for large data:
+// Random initialization - BROKEN for large data:
 var largeModel = new UMapModel();
-// Default: AlwaysUseSpectral = false for 100k+ samples
+largeModel.InitMethod = InitializationMethod.Random;  // Explicitly use random
 var embedding = largeModel.Fit(largeDataset, embeddingDimension: 2);
 // Result: Fragmented global structure, broken manifold topology
 
-// Spectral initialization - REQUIRED for large data:
+// Spectral initialization (DEFAULT in v3.40.0) - REQUIRED for quality:
 var spectralModel = new UMapModel();
-spectralModel.AlwaysUseSpectral = true;  // Essential for >20k samples!
+// InitMethod = InitializationMethod.Spectral is now the DEFAULT!
 var embedding = spectralModel.Fit(largeDataset, embeddingDimension: 2);
 // Result: Properly preserved global structure and manifold topology
 ```
@@ -597,16 +622,18 @@ var embedding = spectralModel.Fit(largeDataset, embeddingDimension: 2);
 
 **Production Strategy:**
 ```csharp
-// For production with large datasets (>20k):
+// v3.40.0: Spectral is now the DEFAULT - no need to set explicitly!
 var model = new UMapModel();
-model.AlwaysUseSpectral = true;  // Accept the time cost for quality
+// InitMethod = InitializationMethod.Spectral (automatic)
+var embedding = model.Fit(largeDataset);  // Best quality by default!
+
+// For speed-critical applications, you can opt for Auto mode:
+var fastModel = new UMapModel();
+fastModel.InitMethod = InitializationMethod.Auto;  // Size-based selection
+var embedding = fastModel.Fit(largeDataset);
+
 // Alternative: Use smaller representative subset for spectral init,
 // then apply learned parameters to full dataset
-
-// For research/exploration with large datasets:
-var model = new UMapModel();
-model.AlwaysUseSpectral = true;  // Quality over speed
-// Consider overnight processing or dedicated compute resources
 ```
 
 **Perfect for:**
@@ -1016,15 +1043,16 @@ var customEmbedding = model.Fit(data,
 - **Model persistence**: Save/load trained models efficiently
 - **Safety features**: 5-level outlier detection for AI validation
 
-### 🔧 **Complete API Example with All Features**
+### 🔧 **Complete API Example with All Features (v3.40.0)**
 ```csharp
 using UMAPuwotSharp;
 
 // Create model with enhanced features
 using var model = new UMapModel();
 
-// NEW: Force spectral initialization for any dataset size
-model.AlwaysUseSpectral = true;  // Better quality for complex manifolds
+// NEW v3.40.0: Spectral initialization is now the DEFAULT!
+// No need to set InitMethod unless you want Auto or Random
+// model.InitMethod = InitializationMethod.Spectral;  // This is the default
 
 // Train with all features: Spectral + HNSW + smart defaults + progress reporting
 var embedding = model.FitWithProgress(
@@ -1037,8 +1065,8 @@ var embedding = model.FitWithProgress(
     nEpochs: 300,
     metric: DistanceMetric.Cosine, // HNSW-accelerated!
     forceExactKnn: false,          // Use HNSW optimization (50-2000x faster)
-    localConnectivity: 1.3f,       // NEW: Local connectivity for fuzzy simplicial set
-    bandwidth: 3.2f                // NEW: Bandwidth for kernel density estimation
+    localConnectivity: 1.3f,       // Local connectivity for fuzzy simplicial set
+    bandwidth: 3.2f                // Bandwidth for kernel density estimation
 );
 
 // Save model with enhanced metadata
@@ -1048,9 +1076,9 @@ model.SaveModel("production_model.umap");
 using var loadedModel = UMapModel.LoadModel("production_model.umap");
 
 // NEW: Access hyperparameters from ModelInfo
+Console.WriteLine($"Initialization: {loadedModel.InitMethod}");  // Spectral
 Console.WriteLine($"Local Connectivity: {loadedModel.ModelInfo.LocalConnectivity}");
 Console.WriteLine($"Bandwidth: {loadedModel.ModelInfo.Bandwidth}");
-Console.WriteLine($"Spectral Init Used: {loadedModel.AlwaysUseSpectral}");
 
 // Transform with safety analysis
 var results = loadedModel.TransformWithSafety(newData);
@@ -1584,7 +1612,8 @@ HNSW acceleration works with multiple distance metrics:
 
 | Version | Release Date | Key Features | Performance |
 |---------|--------------|--------------|-------------|
-| **3.40.0** | 2025-10-27 | **AlwaysUseSpectral property** (force spectral init), **Eigen compilation fix** (MSVC + performance), **LocalConnectivity & Bandwidth integration**, **Hairy mammoth bandwidth sweep**, Enhanced visualization titles, Spectral quality boost | Advanced algorithms revolution |
+| **3.40.0** | 2025-10-31 | **InitializationMethod enum** (clear API), **Spectral default** (best quality out-of-the-box), **API clarity** (replaced boolean with enum), **Backward compatibility** (obsolete property), **Dynamic metadata** (model-extracted params), **Clean compilation** (zero warnings) | Initialization API enhancement |
+| **3.39.0** | 2025-10-27 | **AlwaysUseSpectral property** (force spectral init), **Eigen compilation fix** (MSVC + performance), **LocalConnectivity & Bandwidth integration**, **Bandwidth sweep testing**, Enhanced visualization titles, Spectral quality boost | Advanced algorithms revolution |
 | **3.37.0** | 2025-10-26 | **OpenMP parallelization** (4-5x transform speedup), **Single-point optimization** (12-15x speedup), **Stringstream persistence** (no temp files), **Windows DLL stability**, Thread-safe operations | Major performance revolution |
 | **3.33.1** | 2025-10-25 | **Dual-mode exact k-NN integration**, CPU core reporting, Complete parameter propagation, umappp with knncolle, Enhanced progress monitoring | Production-grade dual-mode accuracy |
 | **3.16.0** | 2025-10-02 | **Critical Euclidean distance fix**, Perfect pipeline consistency (MSE=0), All 15/15 tests passing, Exact coordinate preservation | Production reliability fix |
@@ -1625,7 +1654,7 @@ model.SaveModel("model.umap");  // Stream-based serialization with integrity che
 var loadedModel = UMapModel.LoadModel("model.umap");  // Automatic corruption detection
 ```
 
-**Recommendation**: Upgrade to v3.33.1 for dual-mode flexibility, CPU performance monitoring, and complete parameter propagation ensuring production-grade reliability.
+**Recommendation**: Upgrade to v3.40.0 for the clearer InitializationMethod API with spectral default, ensuring best quality embeddings out-of-the-box with explicit control options.
 
 ## References
 

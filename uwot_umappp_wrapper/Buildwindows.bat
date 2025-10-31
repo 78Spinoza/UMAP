@@ -146,16 +146,17 @@ echo   Copying Files to C# Project
 echo ===========================================
 echo.
 
-REM Copy DLL directly to C# project folder
+REM Copy DLL directly to C# project folder (CRITICAL: must be project root, not runtimes folder)
 if exist "build\Release\uwot.dll" (
-    if exist "..\UMAPuwotSharp\UMAPuwotSharp\" (
-        copy "build\Release\uwot.dll" "..\UMAPuwotSharp\UMAPuwotSharp\" >nul
-        echo [COPY] uwot.dll copied to C# project folder
+    powershell -Command "Copy-Item 'build\Release\uwot.dll' '..\UMAPuwotSharp\UMAPuwotSharp\uwot.dll' -Force"
+    if %ERRORLEVEL% EQU 0 (
+        echo [COPY] uwot.dll copied to C# project folder successfully
     ) else (
-        echo [WARN] C# project folder not found: ..\UMAPuwotSharp\UMAPuwotSharp\
+        echo [FAIL] Failed to copy uwot.dll - error code %ERRORLEVEL%
     )
 ) else (
-    echo [FAIL] uwot.dll not found for copying
+    echo [FAIL] uwot.dll not found at: build\Release\uwot.dll
+    echo [INFO] Current directory: %CD%
 )
 
 echo.

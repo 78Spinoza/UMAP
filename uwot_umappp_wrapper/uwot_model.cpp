@@ -15,6 +15,31 @@ namespace model_utils {
 
     void destroy_model(UwotModel* model) {
         if (model) {
+            // Explicit cleanup for documentation and safety
+            // (std::vector and std::unique_ptr have automatic cleanup via RAII, but explicit is clearer)
+            model->embedding.clear();
+            model->initial_embedding.clear();
+            model->raw_data.clear();
+            model->nn_indices.clear();
+            model->nn_distances.clear();
+            model->nn_weights.clear();
+            model->rho.clear();
+            model->sigma.clear();
+            model->positive_head.clear();
+            model->positive_tail.clear();
+            model->positive_weights.clear();
+            model->edge_targets.clear();
+            model->edge_weights.clear();
+            model->cumulative_num_edges.clear();
+            model->epochs_per_sample.clear();
+            model->epoch_of_next_sample.clear();
+            model->epoch_of_next_negative_sample.clear();
+
+            // Smart pointers will auto-delete on destruction, but reset for clarity
+            model->original_space_index.reset();
+            model->embedding_space_index.reset();
+
+            // Finally delete the model itself
             delete model;
         }
     }

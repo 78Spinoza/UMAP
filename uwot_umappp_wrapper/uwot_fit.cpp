@@ -38,27 +38,27 @@ void compute_normalization(const std::vector<float>& data, int n_obs, int n_dim,
     means.resize(n_dim);
     stds.resize(n_dim);
 
-    // Calculate means
+    // Calculate means with parallel reduction for large datasets
     std::fill(means.begin(), means.end(), 0.0f);
-    for (int i = 0; i < n_obs; i++) {
-        for (int j = 0; j < n_dim; j++) {
-            means[j] += data[static_cast<size_t>(i) * static_cast<size_t>(n_dim) + static_cast<size_t>(j)];
-        }
-    }
+#pragma omp parallel for if(n_obs > 1000)
     for (int j = 0; j < n_dim; j++) {
-        means[j] /= static_cast<float>(n_obs);
+        float sum = 0.0f;
+        for (int i = 0; i < n_obs; i++) {
+            sum += data[static_cast<size_t>(i) * static_cast<size_t>(n_dim) + static_cast<size_t>(j)];
+        }
+        means[j] = sum / static_cast<float>(n_obs);
     }
 
-    // Calculate standard deviations
+    // Calculate standard deviations with parallel reduction for large datasets
     std::fill(stds.begin(), stds.end(), 0.0f);
-    for (int i = 0; i < n_obs; i++) {
-        for (int j = 0; j < n_dim; j++) {
-            float diff = data[static_cast<size_t>(i) * static_cast<size_t>(n_dim) + static_cast<size_t>(j)] - means[j];
-            stds[j] += diff * diff;
-        }
-    }
+#pragma omp parallel for if(n_obs > 1000)
     for (int j = 0; j < n_dim; j++) {
-        stds[j] = std::sqrt(stds[j] / static_cast<float>(n_obs - 1));
+        float sum_sq = 0.0f;
+        for (int i = 0; i < n_obs; i++) {
+            float diff = data[static_cast<size_t>(i) * static_cast<size_t>(n_dim) + static_cast<size_t>(j)] - means[j];
+            sum_sq += diff * diff;
+        }
+        stds[j] = std::sqrt(sum_sq / static_cast<float>(n_obs - 1));
         if (stds[j] < 1e-8f) stds[j] = 1.0f; // Prevent division by zero
     }
 }

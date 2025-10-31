@@ -430,7 +430,8 @@ namespace UMAPDemo
                     floatData2[i, j] = (float)data2[i, j];
 
             var umap = new UMapModel();
-            umap.AlwaysUseSpectral = true;  // Enable spectral initialization for better quality
+            // Note: Spectral initialization is now the default for best quality
+            // umap.InitMethod = InitializationMethod.Spectral; // Already default
             var stopwatch = Stopwatch.StartNew();
             var embedding = umap.FitWithProgress(
                 data: floatData2,
@@ -1305,17 +1306,18 @@ HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.
                 for (int j = 0; j < nFeatures; j++)
                     floatData[i, j] = (float)data2[i, j];
 
-            // Test bandwidth values from 2.0 to 4.0 in increments of 0.25
-            var bandwidthTests = new[] { 2.0f, 2.25f, 2.5f, 2.75f, 3.0f, 3.25f, 3.5f, 3.75f, 4.0f };
+            // Test 10 bandwidth values from 3.0 to 5.0 in increments of ~0.22
+            var bandwidthTests = new[] { 3.0f, 3.2f, 3.4f, 3.6f, 3.8f, 4.0f, 4.2f, 4.4f, 4.6f, 4.8f, 5.0f };
             var results = new List<(float bandwidth, double[,] embedding, double time, double quality)>();
 
-            Console.WriteLine($"   🔍 Testing 9 bandwidth values with n_neighbors=60, local_connectivity=2.0, spread=1.5...");
+            Console.WriteLine($"   🔍 Testing {bandwidthTests.Length} bandwidth values (3.0-5.0) with n_neighbors=60, local_connectivity=2.0, spread=2.0...");
 
             foreach (var bandwidth in bandwidthTests)
             {
-                Console.WriteLine($"   📊 Testing bandwidth = {bandwidth:F1} (n_neighbors=60, local_connectivity=2.0, spectral init)...");
+                Console.WriteLine($"   📊 Testing bandwidth = {bandwidth:F1} (n_neighbors=60, local_connectivity=2.0, spread=2.0, spectral init)...");
                 var model = new UMapModel();
-                model.AlwaysUseSpectral = true;  // Enable spectral initialization for best quality
+                // Note: Spectral initialization is now the default for best quality
+                // model.InitMethod = InitializationMethod.Spectral; // Already default
 
                 var stopwatch = Stopwatch.StartNew();
                 var embedding = model.FitWithProgress(
@@ -1324,13 +1326,13 @@ HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.
                     embeddingDimension: 2,
                     nNeighbors: 60,
                     minDist: 0.35f,
-                    spread: 1.5f,
+                    spread: 2.0f,  // Changed from 1.5 to 2.0
                     nEpochs: 300,
                     metric: DistanceMetric.Euclidean,
                     forceExactKnn: false,
                     autoHNSWParam: false,
                     randomSeed: 42,
-                    localConnectivity: 2.0f,
+                    localConnectivity: 2.0f,  // Already 2.0
                     bandwidth: bandwidth
                 );
                 stopwatch.Stop();
@@ -1349,9 +1351,10 @@ HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.
 
                 // Create visualization for all bandwidth tests
                 var paramInfo = CreateFitParamInfo(model, stopwatch.Elapsed.TotalSeconds, "Hairy_Mammoth_Bandwidth_Experiments");
-                paramInfo["n_neighbors"] = "45";
+                paramInfo["n_neighbors"] = "60";
                 paramInfo["min_dist"] = "0.35";
-                paramInfo["local_connectivity"] = "1.3";
+                paramInfo["spread"] = "2.0";
+                paramInfo["local_connectivity"] = "2.0";
                 paramInfo["bandwidth"] = bandwidth.ToString("F1");
                 paramInfo["dataset"] = "Hairy Mammoth 50k";
                 paramInfo["embedding_quality"] = quality.ToString("F4");
@@ -1360,7 +1363,7 @@ HNSW: M={modelInfo.HnswM}, ef_c={modelInfo.HnswEfConstruction}, ef_s={modelInfo.
                 Directory.CreateDirectory(experimentDir);
                 var imageNumber = Array.IndexOf(bandwidthTests, bandwidth) + 1;
                 var outputPath = Path.Combine(experimentDir, $"{imageNumber:D2}_hairy_bandwidth_{bandwidth:F1}.png");
-                var title = $"Hairy Mammoth Bandwidth Experiment: k=45, local_connectivity=1.3, bandwidth={bandwidth:F1}\n" + BuildVisualizationTitle(model, "Hairy Mammoth Bandwidth");
+                var title = BuildVisualizationTitle(model, $"Hairy Mammoth Bandwidth Experiment (BW={bandwidth:F1})");
                 Visualizer.PlotMammothUMAP(doubleEmbedding, labels2, title, outputPath, paramInfo, autoFitAxes: true, partNames: hairyUniqueParts);
                 Console.WriteLine($"      📈 Saved: {Path.GetFileName(outputPath)}");
             }

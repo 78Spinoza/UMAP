@@ -1,774 +1,431 @@
-# Enhanced UMAP API Documentation
+# UMAPuwotSharp API Documentation
+
+## Table of Contents
+- [Overview](#overview)
+- [Core Classes](#core-classes)
+- [Enumerations](#enumerations)
+- [API Reference](#api-reference)
+- [Usage Examples](#usage-examples)
 
 ## Overview
-Complete API documentation for the Enhanced UMAP implementation with revolutionary HNSW k-NN optimization, dual HNSW architecture, stream-based serialization, and comprehensive CRC32 validation. This document covers both C++ and C# APIs with comprehensive examples and best practices.
 
-## 🚀 Revolutionary Features in v3.37.0
+UMAPuwotSharp provides a production-ready C# wrapper for high-performance UMAP (Uniform Manifold Approximation and Projection) dimensionality reduction with advanced features including HNSW optimization, safety analysis, and comprehensive configuration options.
 
-### OpenMP Parallelization for 4-5x Transform Speedup
-- **Multi-threaded transforms**: Automatic parallel processing for multiple data points
-- **Thread-safe HNSW queries**: Removed setEf() calls from parallel regions
-- **Atomic error handling**: Thread-safe error tracking with std::atomic<int>
-- **OpenMP thread count reporting**: Real-time feedback showing parallel processing capabilities
+## Core Classes
 
-### Single-Point Transform Optimization (12-15x Speedup)
-- **Stack allocation**: Zero-heap allocation with std::array for single data points
-- **Spectral interpolation**: Fast 5-NN weighted average for initial embedding
-- **Fast path detection**: Automatic selection of optimized code path for single points
-- **No malloc overhead**: Eliminates heap fragmentation and allocation delays
+### UMapModel
 
-### Stringstream HNSW Persistence
-- **No temporary files**: PacMap-style in-memory serialization approach
-- **Faster save/load**: Eliminates filesystem overhead and file I/O delays
-- **Memory-efficient**: Direct stream operations without intermediate buffers
-- **Cross-platform**: Consistent binary format with LZ4 compression
+Main class for UMAP model training, transformation, and persistence.
 
-### Windows DLL Stability Improvements
-- **DllMain handler**: Proper OpenMP cleanup on DLL unload
-- **uwot_cleanup() function**: Explicit API for graceful OpenMP shutdown
-- **Post-fit cleanup**: Automatic thread pool shutdown after training
-- **Prevents segfaults**: Eliminates crashes during DLL unload on Windows
+```csharp
+public class UMapModel : IDisposable
+{
+    // Properties
+    public InitializationMethod InitMethod { get; set; }
+    public ModelInfo ModelInfo { get; }
 
----
+    [Obsolete("Use InitMethod property instead")]
+    public bool AlwaysUseSpectral { get; set; }
 
-## 🚀 Revolutionary Features in v3.15.0
+    // Methods
+    public float[,] Fit(float[,] data, ...);
+    public float[,] FitWithProgress(float[,] data, ...);
+    public float[,] Transform(float[,] data);
+    public TransformResult[] TransformWithSafety(float[,] data);
+    public void SaveModel(string filePath);
+    public static UMapModel LoadModel(string filePath);
+}
+```
 
-### Stream-Based HNSW Serialization with CRC32 Validation
-- **Zero temporary files**: Direct memory-to-file operations
-- **Automatic corruption detection**: CRC32 validation for both HNSW indices
-- **Deployment-grade reliability**: Production-ready model persistence
-- **Cross-platform compatibility**: Consistent binary format across Windows/Linux
+### ModelInfo
 
-### Dual HNSW Architecture for AI Inference
-- **Original space HNSW**: For traditional fitting and k-NN graph construction
-- **Embedding space HNSW**: For revolutionary AI pattern similarity search
-- **AI safety features**: 5-level outlier detection in learned embedding space
-- **Sub-millisecond inference**: Real-time AI confidence assessment
+Contains comprehensive metadata about a fitted UMAP model.
 
-### 16-bit Quantization Integration
-- **85-95% file size reduction**: Models compress from 240MB to 15-45MB
-- **Minimal accuracy loss**: <0.2% difference with full precision
-- **HNSW reconstruction**: Automatic index rebuilding from quantized codes
+```csharp
+public class ModelInfo
+{
+    public int TrainingSamples { get; }
+    public int InputDimension { get; }
+    public int OutputDimension { get; }
+    public string MetricName { get; }
+    public int Neighbors { get; }
+    public float MinimumDistance { get; }
+    public float Spread { get; }
+    public float LocalConnectivity { get; }
+    public float Bandwidth { get; }
+    public bool IsHNSWEnabled { get; }
+}
+```
 
----
+### TransformResult
 
-## C# API Reference
+Represents the result of a transform operation with safety analysis.
 
-### Core Classes
+```csharp
+public class TransformResult
+{
+    public float[] Embedding { get; }
+    public float ConfidenceScore { get; }
+    public OutlierLevel OutlierSeverity { get; }
+    public string QualityAssessment { get; }
+    public bool IsProductionReady { get; }
+    public int[] NearestNeighborIndices { get; }
+    public float[] NearestNeighborDistances { get; }
+}
+```
 
-#### UMapModel
-Main class for UMAP training and transformations with revolutionary HNSW optimization.
+## Enumerations
+
+### InitializationMethod
+
+**NEW in v3.40.0**: Controls UMAP initialization strategy.
+
+```csharp
+public enum InitializationMethod
+{
+    Auto = -1,      // Automatic selection: ≤20k samples→Spectral, >20k→Random
+    Random = 0,     // Fast random initialization (lower quality for large datasets)
+    Spectral = 1    // High-quality manifold-aware initialization (DEFAULT)
+}
+```
+
+**Default Value**: `InitializationMethod.Spectral` (since v3.40.0)
+
+**Usage**:
+```csharp
+var model = new UMapModel();
+
+// Explicit spectral (high quality) - this is the default
+model.InitMethod = InitializationMethod.Spectral;
+
+// Auto mode (size-based selection)
+model.InitMethod = InitializationMethod.Auto;
+
+// Random (fast but lower quality)
+model.InitMethod = InitializationMethod.Random;
+```
+
+### DistanceMetric
+
+Specifies the distance metric for UMAP computation.
+
+```csharp
+public enum DistanceMetric
+{
+    Euclidean,      // General-purpose (HNSW accelerated)
+    Cosine,         // High-dimensional sparse data (HNSW accelerated)
+    Manhattan,      // Outlier-robust (HNSW accelerated)
+    Correlation,    // Time series, correlated features (exact fallback)
+    Hamming         // Binary, categorical data (exact fallback)
+}
+```
+
+### OutlierLevel
+
+Five-level outlier classification for safety analysis.
+
+```csharp
+public enum OutlierLevel
+{
+    Normal = 0,         // ≤95th percentile - similar to training data
+    Unusual = 1,        // 95-99th percentile - noteworthy but acceptable
+    MildOutlier = 2,    // 99th percentile to 2.5σ - moderate deviation
+    ExtremeOutlier = 3, // 2.5σ to 4σ - significant deviation
+    NoMansLand = 4      // >4σ - completely outside training distribution
+}
+```
+
+## API Reference
+
+### Training Methods
+
+#### Fit
+
+Basic training method without progress reporting.
+
+```csharp
+public float[,] Fit(
+    float[,] data,
+    int embeddingDimension = 2,
+    int nNeighbors = 15,
+    float minDist = 0.1f,
+    float spread = 1.0f,
+    int nEpochs = 200,
+    DistanceMetric metric = DistanceMetric.Euclidean,
+    bool forceExactKnn = false,
+    bool autoHNSWParam = true,
+    int randomSeed = 42,
+    float localConnectivity = 1.0f,
+    float bandwidth = 1.0f
+)
+```
+
+**Parameters**:
+- `data`: Input data matrix [samples × features]
+- `embeddingDimension`: Output dimensionality (1-50)
+- `nNeighbors`: Number of nearest neighbors (5-100)
+- `minDist`: Minimum distance in embedding (0.0-0.99)
+- `spread`: Scale of embedded points (0.5-5.0)
+- `nEpochs`: Training iterations (50-1000)
+- `metric`: Distance metric
+- `forceExactKnn`: Use exact k-NN instead of HNSW
+- `autoHNSWParam`: Auto-optimize HNSW parameters
+- `randomSeed`: Random seed for reproducibility
+- `localConnectivity`: Fuzzy simplicial set connectivity (0.5-3.0)
+- `bandwidth`: Kernel density estimation bandwidth (0.5-5.0)
+
+**Returns**: Embedding matrix [samples × embeddingDimension]
+
+#### FitWithProgress
+
+Training with real-time progress callbacks.
+
+```csharp
+public float[,] FitWithProgress(
+    float[,] data,
+    Action<ProgressInfo> progressCallback,
+    // ... same parameters as Fit()
+)
+```
+
+**Progress Callback**:
+```csharp
+public class ProgressInfo
+{
+    public int CurrentEpoch { get; }
+    public int TotalEpochs { get; }
+    public float PercentComplete { get; }
+    public string Message { get; }
+    public string Phase { get; }
+}
+```
+
+### Transform Methods
+
+#### Transform
+
+Fast transformation of new data to embedding space.
+
+```csharp
+public float[,] Transform(float[,] data)
+```
+
+**Parameters**:
+- `data`: New data matrix [samples × features] (must match training feature count)
+
+**Returns**: Embedding matrix [samples × embeddingDimension]
+
+**Performance**: 1-3ms per sample with HNSW optimization
+
+#### TransformWithSafety
+
+Transform with comprehensive safety analysis and outlier detection.
+
+```csharp
+public TransformResult[] TransformWithSafety(float[,] data)
+```
+
+**Returns**: Array of `TransformResult` objects with:
+- Embedding coordinates
+- Confidence scores (0.0-1.0)
+- Outlier severity level
+- Production readiness flag
+- Nearest neighbor information
+
+**Performance**: 3-5ms per sample (includes safety analysis)
+
+### Persistence Methods
+
+#### SaveModel
+
+Save trained model to disk with compression and integrity validation.
+
+```csharp
+public void SaveModel(string filePath)
+```
+
+**Format**: Binary format with:
+- Model parameters
+- Training statistics
+- HNSW indices (both original and embedding space)
+- CRC32 checksums for corruption detection
+
+#### LoadModel
+
+Load previously saved model from disk.
+
+```csharp
+public static UMapModel LoadModel(string filePath)
+```
+
+**Validation**: Automatic CRC32 integrity checking
+
+## Usage Examples
+
+### Basic Training
 
 ```csharp
 using UMAPuwotSharp;
 
-// Create model instance
+// Create model (spectral initialization is default)
 using var model = new UMapModel();
+
+// Train with default settings
+var embedding = model.Fit(
+    data: trainingData,
+    embeddingDimension: 2
+);
 ```
 
-### Training Methods
+### Advanced Configuration
 
-#### Fit() - Standard Training with All Enhancements
 ```csharp
-public float[,] Fit(float[,] data,
-                    int embeddingDimension = 2,
-                    int? nNeighbors = null,
-                    float? minDist = null,
-                    float? spread = null,
-                    int nEpochs = 300,
-                    DistanceMetric metric = DistanceMetric.Euclidean,
-                    bool forceExactKnn = false,
-                    int hnswM = -1,
-                    int hnswEfConstruction = -1,
-                    int hnswEfSearch = -1,
-                    bool useQuantization = false,
-                    int randomSeed = -1,
-                    bool autoHNSWParam = true)
-```
+using var model = new UMapModel();
 
-**Enhanced Parameters:**
-- `spread`: Smart scale parameter (auto-optimized by dimension)
-- `forceExactKnn`: Force exact k-NN instead of HNSW optimization (50-2000x speedup)
-- `hnswM`: HNSW graph degree parameter (-1 = auto-select based on dataset size)
-- `hnswEfConstruction`: HNSW build quality parameter (-1 = auto-select)
-- `hnswEfSearch`: HNSW query quality parameter (-1 = auto-select)
-- `useQuantization`: Enable 85-95% file size reduction
-- `randomSeed`: Random seed for reproducible training (-1 = random)
-- `autoHNSWParam`: Automatically optimize HNSW parameters based on data characteristics
+// Explicit initialization control
+model.InitMethod = InitializationMethod.Spectral;  // High quality (default)
 
-**Smart Defaults by Dimension:**
-- **2D**: spread=5.0, minDist=0.35, nNeighbors=25 (optimal for visualization)
-- **10D**: spread=2.0, minDist=0.15, nNeighbors=15 (balanced)
-- **24D+**: spread=1.0, minDist=0.1, nNeighbors=15 (compact for ML pipelines)
-
-**Examples:**
-```csharp
-// Smart automatic defaults with all optimizations (recommended)
-var embedding2D = model.Fit(data, embeddingDimension: 2);
-var embedding27D = model.Fit(data, embeddingDimension: 27);
-
-// Full optimization: HNSW + Quantization + Custom parameters
-var optimizedEmbedding = model.Fit(data,
+var embedding = model.FitWithProgress(
+    data: trainingData,
+    progressCallback: progress =>
+        Console.WriteLine($"{progress.Phase}: {progress.PercentComplete:F1}%"),
     embeddingDimension: 20,
-    spread: 2.0f,                    // Balanced manifold preservation
-    minDist: 0.1f,                   // Optimal for clustering
-    nNeighbors: 30,                  // Good for 20D
-    metric: DistanceMetric.Cosine,   // HNSW accelerated
-    forceExactKnn: false,            // Enable 50-2000x speedup
-    useQuantization: true,           // Enable 85-95% compression
-    randomSeed: 42,                  // Reproducible training
-    autoHNSWParam: true);            // Auto-optimize HNSW parameters
-
-// Force exact computation with reproducible results (for validation/research)
-var exactEmbedding = model.Fit(data,
-    forceExactKnn: true,
-    randomSeed: 12345,
-    autoHNSWParam: false);
-
-// Custom HNSW parameters for specific performance requirements
-var customHNSW = model.Fit(data,
-    embeddingDimension: 2,
-    hnswM: 64,                       // Higher connectivity for better recall
-    hnswEfConstruction: 256,         // Higher build quality
-    hnswEfSearch: 128,               // Higher search quality
-    autoHNSWParam: false);           // Use manual parameters
+    nNeighbors: 30,
+    minDist: 0.1f,
+    spread: 2.0f,
+    metric: DistanceMetric.Cosine,
+    localConnectivity: 1.3f,
+    bandwidth: 3.2f
+);
 ```
 
-#### FitWithProgress() - Training with Enhanced Progress Reporting
-```csharp
-public float[,] FitWithProgress(float[,] data,
-                               ProgressCallback progressCallback,
-                               int embeddingDimension = 2,
-                               int? nNeighbors = null,
-                               float? minDist = null,
-                               float? spread = null,
-                               int nEpochs = 300,
-                               DistanceMetric metric = DistanceMetric.Euclidean,
-                               bool forceExactKnn = false,
-                               bool useQuantization = false,
-                               int randomSeed = -1,
-                               bool autoHNSWParam = true)
-```
+### Production Inference with Safety
 
-**Enhanced Progress Reporting:**
-The callback receives detailed phase information:
-- "Z-Normalization" - Data preprocessing
-- "Building HNSW index" - HNSW construction
-- "HNSW k-NN Graph" - Fast approximate k-NN
-- "Exact k-NN Graph" - Traditional brute-force (when needed)
-- "Optimization" - SGD training phases
-
-**Example:**
 ```csharp
-var embedding = model.FitWithProgress(data,
-    progressCallback: (epoch, total, percent) =>
+// Transform new data with safety checks
+var results = model.TransformWithSafety(newData);
+
+foreach (var result in results)
+{
+    Console.WriteLine($"Confidence: {result.ConfidenceScore:F3}");
+    Console.WriteLine($"Quality: {result.QualityAssessment}");
+
+    if (result.OutlierSeverity >= OutlierLevel.ExtremeOutlier)
     {
-        Console.WriteLine($"Training progress: {percent:F1}%");
-        if (epoch % 50 == 0)
-        {
-            Console.WriteLine($"Epoch {epoch}/{total} - {percent:F1}% complete");
-        }
-    },
-    embeddingDimension: 2,
-    metric: DistanceMetric.Euclidean,
-    forceExactKnn: false,      // HNSW optimization enabled
-    useQuantization: true);    // Enable compression
-```
-
-### 🆕 Enhanced Training Parameters (v3.16.0)
-
-#### Reproducible Training with Random Seeds
-```csharp
-// Set random seed for reproducible results
-var reproducibleEmbedding = model.Fit(data,
-    randomSeed: 42,                  // Fixed seed for same results every run
-    embeddingDimension: 2,
-    useQuantization: true);
-
-// Random seed (-1) for varied results each run
-var variedEmbedding = model.Fit(data,
-    randomSeed: -1,                  // Default: random initialization
-    embeddingDimension: 2);
-```
-
-#### HNSW Parameter Optimization
-```csharp
-// Automatic HNSW parameter optimization (recommended)
-var autoOptimized = model.Fit(data,
-    autoHNSWParam: true,             // Default: smart parameter selection
-    embeddingDimension: 20);
-
-// Manual HNSW tuning for specific requirements
-var manualTuned = model.Fit(data,
-    hnswM: 48,                       // Graph connectivity (16-64)
-    hnswEfConstruction: 200,         // Build quality (64-400)
-    hnswEfSearch: 100,               // Search quality (32-200)
-    autoHNSWParam: false);           // Override auto-optimization
-```
-
-**Parameter Guidelines:**
-- **`hnswM`**: Higher values = better recall, more memory (16-64, default auto)
-- **`hnswEfConstruction`**: Higher values = better index quality, slower build (64-400, default auto)
-- **`hnswEfSearch`**: Higher values = better search accuracy, slower queries (32-200, default auto)
-- **`randomSeed`**: Fixed seeds ensure reproducible training across runs
-- **`autoHNSWParam`**: When true, automatically selects optimal parameters based on dataset size and characteristics
-
-#### Performance vs. Quality Trade-offs
-```csharp
-// Maximum performance (faster, less accurate)
-var performanceMode = model.Fit(data,
-    hnswM: 16,                       // Minimal connectivity
-    hnswEfConstruction: 64,          // Minimal build quality
-    hnswEfSearch: 32,                // Minimal search quality
-    autoHNSWParam: false);
-
-// Maximum quality (slower, more accurate)
-var qualityMode = model.Fit(data,
-    hnswM: 64,                       // Maximum connectivity
-    hnswEfConstruction: 400,         // Maximum build quality
-    hnswEfSearch: 200,               // Maximum search quality
-    autoHNSWParam: false);
-```
-
-### Distance Metrics with HNSW Support
-
-#### Supported Metrics
-```csharp
-public enum DistanceMetric
-{
-    Euclidean = 0,    // ✅ HNSW accelerated
-    Cosine = 1,       // ✅ HNSW accelerated
-    Manhattan = 2,    // ✅ HNSW accelerated
-    Correlation = 3,  // ⚡ Falls back to exact
-    Hamming = 4       // ⚡ Falls back to exact
-}
-```
-
-**Performance by Metric:**
-
-| Metric | HNSW Support | Typical Speedup | Best Use Case |
-|--------|--------------|-----------------|---------------|
-| **Euclidean** | ✅ Full | 50-200x | General-purpose data |
-| **Cosine** | ✅ Full | 30-150x | High-dimensional sparse data |
-| **Manhattan** | ✅ Full | 40-180x | Outlier-robust applications |
-| **Correlation** | ⚡ Fallback | 1x | Time series, correlated features |
-| **Hamming** | ⚡ Fallback | 1x | Binary, categorical data |
-
-### Transform Methods
-
-#### Transform() - Standard Transform
-```csharp
-public float[,] Transform(float[,] newData)
-```
-
-**Performance:** <3ms per sample with HNSW optimization
-
-**Example:**
-```csharp
-// Train model first
-var embedding = model.Fit(trainingData, forceExactKnn: false);
-
-// Transform new data (lightning fast with HNSW)
-var newSample = new float[1, features];
-// ... populate newSample ...
-var result = model.Transform(newSample);  // <3ms typical
-```
-
-#### TransformDetailed() - Enhanced Transform with AI Safety Analysis
-```csharp
-public TransformResult TransformDetailed(float[,] newData)
-```
-
-**Returns comprehensive AI safety information:**
-```csharp
-public class TransformResult
-{
-    public float[] ProjectionCoordinates;      // Embedding position
-    public int[] NearestNeighborIndices;       // Training sample indices
-    public float[] NearestNeighborDistances;   // Distances in original space
-    public float ConfidenceScore;              // 0.0-1.0 safety confidence
-    public OutlierLevel Severity;              // 5-level outlier detection
-    public float PercentileRank;               // 0-100% distance ranking
-    public float ZScore;                       // Standard deviations from mean
-}
-
-public enum OutlierLevel
-{
-    Normal = 0,         // ≤ 95th percentile
-    Unusual = 1,        // 95th-99th percentile
-    Mild = 2,           // 99th percentile to 2.5σ
-    Extreme = 3,        // 2.5σ to 4σ
-    NoMansLand = 4      // > 4σ (high risk)
-}
-```
-
-#### TransformWithSafety() - AI Inference with Pattern Similarity
-```csharp
-public TransformResult[] TransformWithSafety(float[,] newData)
-```
-
-**Revolutionary AI inference features:**
-- **Pattern similarity search**: Find similar learned behaviors in embedding space
-- **AI confidence assessment**: Know when AI predictions are reliable
-- **Out-of-distribution detection**: Identify data outside training distribution
-
-**AI Inference Example:**
-```csharp
-// Train AI model with dual HNSW architecture
-var aiEmbedding = model.Fit(trainingData,
-    embeddingDimension: 10,
-    forceExactKnn: false);
-
-// AI inference with safety analysis
-var aiResults = model.TransformWithSafety(newInferenceData);
-foreach (var result in aiResults) {
-    // AI confidence assessment
-    if (result.OutlierLevel >= OutlierLevel.Extreme) {
-        Console.WriteLine("⚠️ AI prediction unreliable - extreme outlier detected");
-        // Flag for human review or fallback to safe mode
+        Console.WriteLine("⚠️  Extreme outlier - AI predictions may be unreliable");
     }
 
-    // Find similar training patterns in embedding space
-    Console.WriteLine($"Similar training samples: {string.Join(", ", result.NearestNeighborIndices)}");
-    Console.WriteLine($"AI confidence score: {result.ConfidenceScore:F3}");
-}
-```
-
-### Model Persistence with Stream-Based Serialization
-
-#### SaveModel() / LoadModel() - Stream-Based with CRC32 Validation
-```csharp
-// Save trained model with stream-based HNSW serialization and CRC32 validation
-model.SaveModel("my_model.umap");  // Automatic CRC32 validation
-
-// Load model with automatic integrity checking
-using var loadedModel = UMapModel.LoadModel("my_model.umap");  // CRC32 validated
-
-// Transform using loaded model (still fast!)
-var result = loadedModel.Transform(newData);
-```
-
-**Enhanced Model Persistence Features:**
-- **Stream-based serialization**: Zero temporary files
-- **CRC32 integrity validation**: Automatic corruption detection
-- **Dual HNSW indices**: Both original and embedding space preserved
-- **Quantization support**: Compressed models with automatic decompression
-- **Cross-platform compatibility**: Consistent format across Windows/Linux
-
-### Enhanced Model Information
-
-#### ModelInfo Property
-```csharp
-public UMapModelInfo ModelInfo { get; }
-
-public class UMapModelInfo
-{
-    public int TrainingSamples;          // Number of training samples
-    public int InputDimension;           // Original feature dimension
-    public int OutputDimension;          // Embedding dimension
-    public int NeighborsUsed;            // k-NN parameter used
-    public float MinDistanceUsed;        // min_dist parameter used
-    public string MetricName;            // Distance metric used
-    public bool IsHNSWOptimized;         // Whether HNSW was used
-    public bool IsQuantized;             // NEW: Whether quantization was used
-    public uint OriginalSpaceCRC32;      // NEW: Original HNSW index CRC32
-    public uint EmbeddingSpaceCRC32;     // NEW: Embedding HNSW index CRC32
-    public float HNSWRecallPercentage;   // NEW: HNSW accuracy estimate
-}
-```
-
-**Example:**
-```csharp
-var info = model.ModelInfo;
-Console.WriteLine($"Model: {info.TrainingSamples} samples, " +
-                 $"{info.InputDimension}D → {info.OutputDimension}D");
-Console.WriteLine($"Metric: {info.MetricName}, HNSW: {info.IsHNSWOptimized}");
-Console.WriteLine($"Quantized: {info.IsQuantized}");
-Console.WriteLine($"CRC32 - Original: {info.OriginalSpaceCRC32:X8}, Embedding: {info.EmbeddingSpaceCRC32:X8}");
-```
-
----
-
-## C++ API Reference
-
-### Core Functions
-
-#### uwot_fit_with_progress_v3() - Latest Enhanced Training
-```cpp
-int uwot_fit_with_progress_v3(
-    UwotModel* model,
-    float* data, int n_obs, int n_dim,
-    int embedding_dim, int n_neighbors, float min_dist, float spread,
-    int n_epochs,
-    UwotMetric metric, float* embedding,
-    uwot_progress_callback_v3 progress_callback,
-    void* user_data = nullptr,
-    int force_exact_knn = 0,
-    int M = -1, int ef_construction = -1, int ef_search = -1,
-    int use_quantization = 0,         // NEW v3.13.0
-    int random_seed = -1,
-    int autoHNSWParam = 1);
-```
-
-**Enhanced Progress Callback with User Data:**
-```cpp
-typedef void (*uwot_progress_callback_v3)(
-    const char* phase,        // Phase name
-    int current,              // Current progress
-    int total,                // Total items
-    float percent,            // Progress percentage
-    const char* message,      // Time estimates, warnings
-    void* user_data           // User-defined context for thread safety
-);
-```
-
-**Example:**
-```cpp
-struct ProgressData {
-    int log_interval;
-    FILE* log_file;
-};
-
-void progress_callback_v3(const char* phase, int current, int total,
-                         float percent, const char* message, void* user_data) {
-    ProgressData* data = static_cast<ProgressData*>(user_data);
-
-    if (current % data->log_interval == 0) {
-        fprintf(data->log_file, "[%s] %.1f%% (%d/%d)", phase, percent, current, total);
-        if (message) fprintf(data->log_file, " - %s", message);
-        fprintf(data->log_file, "\n");
-        fflush(data->log_file);
-    }
-}
-
-// Use all optimizations
-ProgressData progress_data = {50, stdout};
-int result = uwot_fit_with_progress_v3(
-    model, data, n_obs, n_dim, embedding_dim,
-    15, 0.1f, 2.0f, 300, UWOT_METRIC_EUCLIDEAN,
-    embedding, progress_callback_v3, &progress_data,
-    0,  // force_exact_knn = 0 (use HNSW)
-    -1, -1, -1,  // Auto HNSW parameters
-    1,  // use_quantization = 1 (enable compression)
-    -1, 1);  // Auto random seed and HNSW optimization
-```
-
-#### uwot_cleanup() - OpenMP Thread Pool Cleanup (NEW v3.37.0)
-```cpp
-void uwot_cleanup();
-```
-
-**Purpose**: Gracefully shuts down OpenMP thread pool to prevent segfaults during DLL unload on Windows.
-
-**When to Use:**
-- **Windows DLL applications**: Call before unloading the DLL
-- **Process shutdown**: Call before application exit
-- **Memory cleanup**: Force immediate OpenMP thread pool shutdown
-
-**Example:**
-```cpp
-// Use UMAP functionality
-UwotModel* model = uwot_create();
-uwot_fit_with_progress_v2(model, ...);
-uwot_transform(model, ...);
-
-// Clean up before DLL unload (Windows)
-uwot_cleanup();
-uwot_destroy(model);
-```
-
-**Note**: This function is automatically called by DllMain on Windows during DLL_PROCESS_DETACH, but can be called explicitly for manual control.
-
----
-
-### Enhanced Model Information
-
-#### uwot_get_model_info_v2() - Enhanced Model Information
-```cpp
-int uwot_get_model_info_v2(
-    UwotModel* model,
-    int* n_vertices, int* n_dim, int* embedding_dim,
-    int* n_neighbors, float* min_dist, float* spread,
-    UwotMetric* metric,
-    int* hnsw_M, int* hnsw_ef_construction, int* hnsw_ef_search,
-    uint32_t* original_crc,           // NEW: Original HNSW CRC32
-    uint32_t* embedding_crc,          // NEW: Embedding HNSW CRC32
-    uint32_t* version_crc,            // NEW: Model version CRC32
-    float* hnsw_recall_percentage     // NEW: HNSW accuracy estimate
-);
-```
-
----
-
-## Performance Optimization Guide
-
-### HNSW vs Exact Performance Comparison
-
-| Dataset Size | Method | Training Time | Memory Usage | Accuracy |
-|-------------|--------|---------------|--------------|----------|
-| 1,000 × 50  | Exact  | 1.2s          | 240MB        | 100% |
-| 1,000 × 50  | HNSW   | 0.6s          | 45MB         | 99.9% |
-| 10,000 × 200 | Exact  | 12 min        | 2.4GB        | 100% |
-| 10,000 × 200 | HNSW   | 8.1s          | 120MB        | 99.8% |
-| 50,000 × 500 | Exact  | 6+ hours      | 40GB+        | 100% |
-| 50,000 × 500 | HNSW   | 95s           | 450MB        | 99.7% |
-
-### When to Use HNSW vs Exact
-
-#### Use HNSW (forceExactKnn = false) When:
-✅ **Large datasets** (≥1,000 samples)
-✅ **Production applications** requiring fast transforms
-✅ **Supported metrics** (Euclidean, Cosine, Manhattan)
-✅ **Memory-constrained** environments
-✅ **Real-time processing** needs
-✅ **AI inference** with pattern similarity search
-
-#### Use Exact (forceExactKnn = true) When:
-⚡ **Small datasets** (<1,000 samples)
-⚡ **Validation/research** requiring perfect accuracy
-⚡ **Unsupported metrics** (though auto-fallback handles this)
-⚡ **Debugging** HNSW vs exact differences
-
-### Quantization Optimization
-
-#### Use Quantization (useQuantization = true) When:
-✅ **Storage constraints**: 85-95% file size reduction needed
-✅ **Edge deployment**: Limited storage on devices
-✅ **Network distribution**: Faster model transfers
-✅ **Docker containers**: Smaller image sizes
-✅ **Backup/archival**: Significant storage savings
-
-#### Avoid Quantization When:
-⚡ **Perfect precision required**: <0.2% accuracy loss unacceptable
-⚡ **Very small models**: Compression benefit minimal
-⚡ **Real-time training**: Quantization overhead matters
-
-### AI Inference Best Practices
-
-#### Embedding Space Pattern Search
-```csharp
-// Train with dual HNSW architecture
-var aiModel = new UMapModel();
-aiModel.Fit(trainingData, embeddingDimension: 10, forceExactKnn: false);
-
-// Production AI inference with safety checks
-var aiResults = aiModel.TransformWithSafety(inferenceData);
-foreach (var result in aiResults) {
-    // Multi-level safety assessment
-    switch (result.OutlierLevel) {
-        case OutlierLevel.Normal:
-            // High confidence AI prediction
-            ProcessAIPrediction(result);
-            break;
-        case OutlierLevel.Unusual:
-            // Moderate confidence - log for review
-            ProcessWithCaution(result);
-            break;
-        case OutlierLevel.Mild:
-        case OutlierLevel.Extreme:
-            // Low confidence - human intervention needed
-            FlagForHumanReview(result);
-            break;
-        case OutlierLevel.NoMansLand:
-            // Reject prediction - completely outside training
-            RejectAIPrediction(result);
-            break;
+    if (result.IsProductionReady)
+    {
+        // Use embedding for downstream ML tasks
+        ProcessEmbedding(result.Embedding);
     }
 }
 ```
 
----
+### Model Persistence
 
-## File Compatibility Notice
+```csharp
+// Train and save
+using (var model = new UMapModel())
+{
+    var embedding = model.Fit(trainingData);
+    model.SaveModel("production_model.umap");
+}
 
-### ⚠️ Important: Backward Compatibility
-**Models saved with v3.15.0 are NOT backward compatible** with earlier versions due to:
-- New CRC32 integrity validation headers
-- Stream-based HNSW serialization format
-- Enhanced dual HNSW index structure
-- Quantization metadata structure
+// Load and use
+using var loadedModel = UMapModel.LoadModel("production_model.umap");
 
-**Recommendation**: Ensure all deployment environments use v3.15.0+ when saving new models, or maintain compatibility by using v3.14.0 for cross-version compatibility requirements.
+// Access model information
+var info = loadedModel.ModelInfo;
+Console.WriteLine($"Training samples: {info.TrainingSamples}");
+Console.WriteLine($"Input → Output: {info.InputDimension}D → {info.OutputDimension}D");
+Console.WriteLine($"Metric: {info.MetricName}");
+Console.WriteLine($"Local connectivity: {info.LocalConnectivity}");
+Console.WriteLine($"Bandwidth: {info.Bandwidth}");
 
-### Cross-Platform Compatibility
-- **Windows ↔ Linux**: Full compatibility with stream-based format
-- **Endianness handling**: Automatic cross-platform byte order conversion
-- **CRC32 validation**: Consistent across all platforms
+// Transform new data
+var transformed = loadedModel.Transform(newData);
+```
 
----
+### Backward Compatibility
+
+```csharp
+// OLD API (v3.39.0 and earlier) - still works but obsolete
+var model = new UMapModel();
+model.AlwaysUseSpectral = true;  // ← Obsolete but functional
+
+// NEW API (v3.40.0+) - recommended
+var model = new UMapModel();
+model.InitMethod = InitializationMethod.Spectral;  // ← Clear and explicit
+```
+
+## Performance Guidelines
+
+### Memory Requirements
+
+| Dataset Size | Typical Memory | With HNSW Optimization |
+|--------------|----------------|------------------------|
+| 1,000 samples | ~50MB | ~15MB (70% reduction) |
+| 10,000 samples | ~240MB | ~45MB (81% reduction) |
+| 50,000 samples | ~1.2GB | ~180MB (85% reduction) |
+| 100,000 samples | ~2.4GB | ~360MB (85% reduction) |
+
+### Speed Benchmarks
+
+| Operation | Without HNSW | With HNSW | Speedup |
+|-----------|--------------|-----------|---------|
+| Training (10k samples) | 12 min | 8.1s | 89x |
+| Transform (single) | 89ms | 2.3ms | 38x |
+| Transform (batch 100) | 8.9s | 230ms | 38x |
+
+### Initialization Time Comparison
+
+| Dataset Size | Random Init | Spectral Init | Quality Difference |
+|--------------|-------------|---------------|-------------------|
+| 1,000 samples | 0.5s | 1.2s | Minor |
+| 10,000 samples | 2s | 30s | Moderate |
+| 50,000 samples | 10s | 5-10 min | Significant |
+| 100,000 samples | 30s | 20-40 min | Critical |
+
+**Recommendation**: Use spectral initialization (default) for best quality. For speed-critical applications with large datasets, consider `InitMethod = InitializationMethod.Auto`.
+
+## Thread Safety
+
+- `UMapModel` instances are **not thread-safe** for concurrent modifications
+- Multiple read operations (Transform) on a fitted model are safe
+- Use separate model instances for parallel processing
+- Progress callbacks are invoked from the native thread
 
 ## Error Handling
 
-### Common Error Codes
-```cpp
-#define UWOT_SUCCESS 0
-#define UWOT_ERROR_INVALID_PARAMS -1
-#define UWOT_ERROR_MEMORY -2
-#define UWOT_ERROR_NOT_IMPLEMENTED -3
-#define UWOT_ERROR_FILE_IO -4
-#define UWOT_ERROR_MODEL_NOT_FITTED -5
-#define UWOT_ERROR_INVALID_MODEL_FILE -6
-#define UWOT_ERROR_CRC_MISMATCH -7      // NEW: CRC32 validation failure
-```
+All API methods throw appropriate exceptions:
 
-### New CRC32 Error Handling
-```cpp
-if (result == UWOT_ERROR_CRC_MISMATCH) {
-    printf("Model file corruption detected - CRC32 validation failed\n");
-    printf("Model may be corrupted or from incompatible version\n");
-}
-```
-
-### C# Exception Handling
 ```csharp
 try
 {
-    var embedding = model.Fit(data, forceExactKnn: false, useQuantization: true);
-}
-catch (ArgumentNullException ex)
-{
-    // Handle null data
+    var embedding = model.Fit(data);
 }
 catch (ArgumentException ex)
 {
-    // Handle invalid parameters (dimensions, etc.)
+    // Invalid parameters (e.g., wrong dimensions)
 }
 catch (InvalidOperationException ex)
 {
-    // Handle model state errors
-    // May include CRC32 validation failures
+    // Model not fitted, or other state errors
 }
-catch (IOException ex)
+catch (Exception ex)
 {
-    // Handle file I/O errors including corruption
+    // Native library errors
 }
 ```
 
----
+## Version Compatibility
 
-## Testing and Validation
+- **v3.40.0+**: `InitializationMethod` enum, spectral default
+- **v3.39.0+**: `AlwaysUseSpectral` property (now obsolete)
+- **v3.37.0+**: OpenMP parallelization, stringstream persistence
+- **v3.33.0+**: Dual-mode exact k-NN support
+- **v3.14.0+**: Dual HNSW architecture, safety features
 
-### C# Test Results (v3.15.0)
-**Test Summary: 14/15 tests passing**
-
-**✅ Passing Tests:**
-- Benchmark_HNSW_vs_Exact_Performance (1.47x speedup achieved)
-- Test_Model_Persistence (Projection consistency validated)
-- Test_Parameter_Validation (All parameter validation working)
-- Plus 11 additional comprehensive tests
-
-**❌ Known Issue:**
-- Test_Quantization_Pipeline_Consistency - Training vs Transform mismatch detected
-  - 20 mismatches found with max difference of 10.7
-  - Indicates quantization pipeline needs refinement
-  - Non-quantized functionality working perfectly
-
-### C++ Test Results
-- **Comprehensive validation**: All HNSW stream-based serialization tests passing
-- **CRC32 validation**: Automatic integrity checking working correctly
-- **Dual HNSW architecture**: Both original and embedding space indices functioning
-- **Cross-platform compatibility**: Windows/Linux binary format consistency validated
-
----
-
-## Migration Guide
-
-### From v3.16.0 to v3.37.0
-```csharp
-// v3.16.0 code (still works - automatic benefits from v3.37.0)
-var embedding = model.Fit(data, embeddingDimension: 2);
-var transformed = model.Transform(newData);  // Now 4-5x faster with OpenMP!
-
-// v3.37.0 - no API changes, but major performance improvements:
-// - Multi-point transforms: 4-5x faster (automatic OpenMP parallelization)
-// - Single-point transforms: 12-15x faster (stack allocation fast path)
-// - Save/load operations: Faster (stringstream persistence)
-// - Windows DLL stability: Improved (automatic OpenMP cleanup)
-
-// Single-point transform automatically uses fast path
-var singlePoint = new float[,] { { 1.0f, 2.0f, 3.0f } };
-var singleEmbedding = model.Transform(singlePoint);  // 12-15x faster!
-
-// Multi-point transform automatically uses OpenMP parallelization
-var multiPoint = new float[100, 3];
-var multiEmbedding = model.Transform(multiPoint);    // 4-5x faster!
-```
-
-**What Changed in v3.37.0:**
-- ✅ **No breaking changes** - all existing code works unchanged
-- ✅ **Automatic speedups** - transforms faster without code modifications
-- ✅ **Better stability** - Windows DLL unload no longer causes segfaults
-- ✅ **Faster persistence** - save/load operations benefit from stringstream approach
-
----
-
-### From v3.14.0 to v3.15.0
-```csharp
-// v3.14.0 code (still works)
-model.SaveModel("model.umap");
-var loadedModel = UMapModel.LoadModel("model.umap");
-
-// v3.15.0 - stream-based serialization with CRC32 is now automatic
-model.SaveModel("model.umap");  // Stream-based with CRC32 validation
-var loadedModel = UMapModel.LoadModel("model.umap");  // Automatic integrity checking
-
-// Enhanced CRC32 reporting available
-var info = loadedModel.ModelInfo;
-Console.WriteLine($"CRC32 validated: Original={info.OriginalSpaceCRC32:X8}, Embedding={info.EmbeddingSpaceCRC32:X8}");
-```
-
-### From v3.13.0 to v3.15.0
-```csharp
-// v3.13.0 quantization code (still works)
-var embedding = model.Fit(data, useQuantization: true);
-
-// v3.15.0 - adds stream-based serialization and dual HNSW
-var embedding = model.Fit(data,
-    useQuantization: true,        // Existing feature
-    forceExactKnn: false);        // HNSW acceleration
-
-// AI inference capabilities now available
-var aiResults = model.TransformWithSafety(newData);
-foreach (var result in aiResults) {
-    Console.WriteLine($"AI confidence: {result.ConfidenceScore:F3}");
-    Console.WriteLine($"Pattern similarity: {result.OutlierLevel}");
-}
-```
-
-### Breaking Changes
-- **⚠️ File compatibility**: Models saved with v3.15.0 cannot be loaded by earlier versions
-- **New parameters**: All new parameters are optional with sensible defaults
-- **Enhanced results**: TransformWithSafety provides additional AI safety information
-- **Automatic features**: Stream-based serialization and CRC32 validation are automatic
-
----
-
-## Best Practices
-
-### Training Best Practices
-
-1. **Use HNSW by default**: Set `forceExactKnn: false` for 50-2000x speedup
-2. **Enable quantization for storage**: Set `useQuantization: true` for 85-95% file size reduction
-3. **Choose optimal metrics**: Euclidean/Cosine/Manhattan get HNSW acceleration
-4. **Use progress callbacks**: Monitor training with enhanced phase reporting
-5. **Validate accuracy**: Compare HNSW vs exact on small subset when needed
-6. **Save trained models**: Use stream-based persistence with automatic CRC32 validation
-
-### AI Inference Best Practices
-
-1. **Use dual HNSW architecture**: Enable both original and embedding space indices
-2. **Implement multi-level safety**: Use TransformWithSafety for comprehensive analysis
-3. **Set confidence thresholds**: Define acceptable confidence scores for your application
-4. **Handle outliers appropriately**: Plan for different outlier levels
-5. **Monitor AI reliability**: Track confidence scores and outlier rates over time
-
-### Production Deployment
-
-1. **Use HNSW models**: Deploy with `forceExactKnn: false` for speed
-2. **Enable quantization**: Use `useQuantization: true` for storage efficiency
-3. **Implement CRC32 validation**: Automatic integrity checking prevents corrupted deployments
-4. **Set up monitoring**: Track transform times, confidence scores, and outlier rates
-5. **Plan fallbacks**: Handle extreme outliers and confidence failures appropriately
-6. **Test cross-platform**: Verify performance on target deployment platforms
-
-This enhanced API provides revolutionary performance for C# UMAP applications with deployment-grade reliability, AI inference capabilities, and massive storage optimization while maintaining full backward compatibility for core functionality.
+Models saved in newer versions can be loaded by older versions (forward compatibility), but newer features may not be available.

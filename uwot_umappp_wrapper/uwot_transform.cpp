@@ -59,6 +59,11 @@ static void interpolate_one_point_fast(
     float sum_weights = 0.0f;
 
     for (int i = 0; i < count; ++i) {
+        // Bounds checking to prevent out-of-range access
+        if (neighbor_idx[i] < 0 || neighbor_idx[i] >= model->n_vertices) {
+            continue; // Skip invalid indices (shouldn't happen with valid HNSW, but defensive)
+        }
+
         float weight = 1.0f / (1e-8f + neighbor_dist[i]);
         const float* neighbor_emb = &model->embedding[static_cast<size_t>(neighbor_idx[i]) * emb_dim];
 
@@ -68,7 +73,8 @@ static void interpolate_one_point_fast(
         sum_weights += weight;
     }
 
-    // Normalize
+    // Normalize with epsilon protection to prevent division by zero
+    sum_weights = std::max(sum_weights, 1e-8f);
     for (int d = 0; d < emb_dim; ++d) {
         out_embedding[d] /= sum_weights;
     }
@@ -82,13 +88,14 @@ static int transform_one_point_fast(
 {
     const int k = model->n_neighbors;
     const int emb_dim = model->embedding_dim;
+    constexpr int MAX_STACK_K = 128;
 
     // Stack-allocated arrays (fast, no heap allocations)
-    std::array<int, 128> neighbor_idx;      // k <= 128 for stack safety
-    std::array<float, 128> neighbor_dist;
-    std::array<float, 128> fuzzy_weights;
+    std::array<int, MAX_STACK_K> neighbor_idx;
+    std::array<float, MAX_STACK_K> neighbor_dist;
+    std::array<float, MAX_STACK_K> fuzzy_weights;
 
-    if (k > 128) {
+    if (k > MAX_STACK_K) {
         return UWOT_ERROR_INVALID_PARAMS; // Fallback to batch path for very large k
     }
 
@@ -109,6 +116,7 @@ static int transform_one_point_fast(
     }
 
     // 2. Compute fuzzy weights using pre-computed rho/sigma
+    float sum_fuzzy = 0.0f;
     for (int i = 0; i < count; ++i) {
         int train_idx = neighbor_idx[i];
         float dist = neighbor_dist[i];
@@ -116,6 +124,14 @@ static int transform_one_point_fast(
         // Fuzzy simplicial set membership: exp(-(dist - rho) / sigma)
         float val = (dist - model->rho[train_idx]) / model->sigma[train_idx];
         fuzzy_weights[i] = (val <= 0.0f) ? 1.0f : std::exp(-val);
+        sum_fuzzy += fuzzy_weights[i];
+    }
+
+    // Normalize fuzzy weights to form proper probability distribution
+    if (sum_fuzzy > 1e-8f) {
+        for (int i = 0; i < count; ++i) {
+            fuzzy_weights[i] /= sum_fuzzy;
+        }
     }
 
     // 3. Initial embedding via 5-NN spectral interpolation (fast convergence)

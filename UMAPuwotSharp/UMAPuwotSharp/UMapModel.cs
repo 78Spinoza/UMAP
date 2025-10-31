@@ -37,6 +37,31 @@ namespace UMAPuwotSharp
     }
 
     /// <summary>
+    /// Initialization methods for UMAP embedding
+    /// </summary>
+    public enum InitializationMethod
+    {
+        /// <summary>
+        /// Auto-select initialization based on dataset size.
+        /// Uses Spectral for ≤20k observations (high quality), Random for >20k (faster)
+        /// </summary>
+        Auto = -1,
+
+        /// <summary>
+        /// Random initialization - fast, works for any dataset size.
+        /// Coordinates sampled from uniform distribution [-10, 10]
+        /// </summary>
+        Random = 0,
+
+        /// <summary>
+        /// Spectral initialization - high quality but slower for large datasets.
+        /// Uses eigendecomposition of graph Laplacian (O(n³) complexity).
+        /// Recommended for datasets ≤20k observations for best quality.
+        /// </summary>
+        Spectral = 1
+    }
+
+    /// <summary>
     /// Outlier severity levels for Enhanced UMAP safety analysis
     /// </summary>
     public enum OutlierLevel
@@ -363,11 +388,24 @@ namespace UMAPuwotSharp
         }
 
         /// <summary>
-        /// Gets or sets whether to always use spectral initialization regardless of dataset size.
+        /// Gets or sets the initialization method for the embedding.
+        /// Default: Spectral (highest quality initialization using graph Laplacian eigendecomposition)
+        /// Note: For very large datasets (>50k), consider using Auto or Random for better performance
+        /// </summary>
+        public InitializationMethod InitMethod { get; set; } = InitializationMethod.Spectral;
+
+        /// <summary>
+        /// [Deprecated] Gets or sets whether to always use spectral initialization regardless of dataset size.
+        /// Use InitMethod property instead for more control.
         /// Default: false (auto-select based on size: >20k samples = random, ≤20k = spectral)
         /// Set to true to force spectral initialization for large datasets (slower but may improve quality)
         /// </summary>
-        public bool AlwaysUseSpectral { get; set; } = false;
+        [Obsolete("Use InitMethod property instead for more explicit control over initialization")]
+        public bool AlwaysUseSpectral
+        {
+            get => InitMethod == InitializationMethod.Spectral;
+            set => InitMethod = value ? InitializationMethod.Spectral : InitializationMethod.Auto;
+        }
 
         #endregion
 
@@ -849,13 +887,13 @@ namespace UMAPuwotSharp
                     _activeCallbacks.Add(nativeCallback);
                 }
 
-                result = CallFitWithProgressV2(_nativeModel, flatData, (long)nSamples, (long)nFeatures, embeddingDimension, nNeighbors, minDist, spread, nEpochs, metric, embedding, nativeCallback, forceExactKnn ? 1 : 0, hnswM, hnswEfConstruction, hnswEfSearch, randomSeed, autoHNSWParam ? 1 : 0, localConnectivity, bandwidth, AlwaysUseSpectral ? 1 : -1);
+                result = CallFitWithProgressV2(_nativeModel, flatData, (long)nSamples, (long)nFeatures, embeddingDimension, nNeighbors, minDist, spread, nEpochs, metric, embedding, nativeCallback, forceExactKnn ? 1 : 0, hnswM, hnswEfConstruction, hnswEfSearch, randomSeed, autoHNSWParam ? 1 : 0, localConnectivity, bandwidth, (int)InitMethod);
             }
             else
             {
                 // CRITICAL FIX: Always use unified pipeline function (even without progress callback)
                 // to ensure HNSW and exact use same normalized data - prevents MSE ~74 issue
-                result = CallFitWithProgressV2(_nativeModel, flatData, (long)nSamples, (long)nFeatures, embeddingDimension, nNeighbors, minDist, spread, nEpochs, metric, embedding, null, forceExactKnn ? 1 : 0, hnswM, hnswEfConstruction, hnswEfSearch, randomSeed, autoHNSWParam ? 1 : 0, localConnectivity, bandwidth, AlwaysUseSpectral ? 1 : -1);
+                result = CallFitWithProgressV2(_nativeModel, flatData, (long)nSamples, (long)nFeatures, embeddingDimension, nNeighbors, minDist, spread, nEpochs, metric, embedding, null, forceExactKnn ? 1 : 0, hnswM, hnswEfConstruction, hnswEfSearch, randomSeed, autoHNSWParam ? 1 : 0, localConnectivity, bandwidth, (int)InitMethod);
             }
 
             ThrowIfError(result);

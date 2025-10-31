@@ -1,4 +1,5 @@
 #include "uwot_distance.h"
+#include "uwot_progress_utils.h"  // For send_warning_to_callback
 #include <cstdio>  // For fprintf warnings
 #include <algorithm>  // For std::clamp
 
@@ -151,6 +152,36 @@ namespace distance_metrics {
     }
 
     // Main validation function that issues warnings for inappropriate data
+    bool detect_zero_norm_vectors(const float* data, int n_obs, int n_dim, UwotMetric metric) {
+        if (metric != UWOT_METRIC_COSINE && metric != UWOT_METRIC_CORRELATION) {
+            return false; // Not applicable for other metrics
+        }
+
+        // Sample up to 1000 vectors or 10% of dataset (whichever is smaller)
+        const int sample_size = std::min(1000, std::max(100, n_obs / 10));
+        int zero_norm_count = 0;
+
+        for (int i = 0; i < sample_size; ++i) {
+            // Sample evenly across dataset
+            int idx = (i * n_obs) / sample_size;
+            const float* vec = data + static_cast<size_t>(idx) * n_dim;
+
+            // Compute L2 norm
+            float norm_sq = 0.0f;
+            for (int d = 0; d < n_dim; ++d) {
+                norm_sq += vec[d] * vec[d];
+            }
+
+            if (norm_sq < 1e-10f) {
+                zero_norm_count++;
+            }
+        }
+
+        // Warn if > 5% of sampled vectors have zero norm
+        float zero_ratio = static_cast<float>(zero_norm_count) / sample_size;
+        return (zero_ratio > 0.05f);
+    }
+
     void validate_metric_data(const float* data, int n_obs, int n_dim, UwotMetric metric) {
         switch (metric) {
             case UWOT_METRIC_HAMMING:
@@ -162,7 +193,12 @@ namespace distance_metrics {
                 break;
 
             case UWOT_METRIC_COSINE:
-                // Could add validation for zero-norm vectors, but cosine_distance already handles this
+                // Validate for zero-norm vectors which cause undefined cosine distance
+                if (detect_zero_norm_vectors(data, n_obs, n_dim, metric)) {
+                    send_warning_to_callback("Warning: Cosine metric detected significant zero-norm vectors (>5%). "
+                                           "Cosine distance is undefined for zero vectors and will default to 1.0. "
+                                           "Consider normalizing data or using a different metric.");
+                }
                 break;
 
             case UWOT_METRIC_EUCLIDEAN:
