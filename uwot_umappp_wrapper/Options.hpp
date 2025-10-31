@@ -209,12 +209,12 @@ struct Options {
     /**
      * Progress callback function for optimization iterations.
      * Called during the layout optimization to report progress.
-     * The function signature is: void(int current_epoch, int total_epochs, const double* embedding)
+     * The function signature is: void(int current_epoch, int total_epochs, const void* embedding)
      * - current_epoch: Current epoch number (1-based)
      * - total_epochs: Total number of epochs to run
-     * - embedding: Current embedding coordinates (can be used to check convergence)
+     * - embedding: Current embedding coordinates as const void* (can be safely cast to Float_* for the actual type)
      */
-    std::function<void(int, int, const double*)> progress_callback;
+    std::function<void(int, int, const void*)> progress_callback;
 };
 
 }

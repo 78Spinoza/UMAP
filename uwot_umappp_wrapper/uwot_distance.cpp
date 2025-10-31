@@ -1,5 +1,6 @@
 #include "uwot_distance.h"
 #include <cstdio>  // For fprintf warnings
+#include <algorithm>  // For std::clamp
 
 namespace distance_metrics {
 
@@ -27,7 +28,7 @@ namespace distance_metrics {
         if (norm_a < 1e-10f || norm_b < 1e-10f) return 1.0f;
 
         float cosine_sim = dot / (norm_a * norm_b);
-        cosine_sim = std::max(-1.0f, std::min(1.0f, cosine_sim));
+        cosine_sim = std::clamp(cosine_sim, -1.0f, 1.0f);
 
         return 1.0f - cosine_sim;
     }
@@ -61,7 +62,7 @@ namespace distance_metrics {
         if (den_a < 1e-10f || den_b < 1e-10f) return 1.0f;
 
         float correlation = num / std::sqrt(den_a * den_b);
-        correlation = std::max(-1.0f, std::min(1.0f, correlation));
+        correlation = std::clamp(correlation, -1.0f, 1.0f);
 
         return 1.0f - correlation;
     }

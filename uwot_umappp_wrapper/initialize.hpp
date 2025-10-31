@@ -92,7 +92,7 @@ Status<Index_, Float_> initialize(NeighborList<Index_, Float_> x, const std::siz
         avg_sigma /= sigmas_out.size();
 
         // Call progress callback with epoch=-1 to indicate this is a smoothing report (not optimization epoch)
-        options.progress_callback(-1, 0, reinterpret_cast<const double*>(embedding));
+        options.progress_callback(-1, 0, static_cast<const void*>(embedding));
 
         // Second call with actual message (some wrappers might only use the message from positive epochs)
         char msg[256];

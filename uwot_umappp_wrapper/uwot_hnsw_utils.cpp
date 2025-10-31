@@ -1,47 +1,9 @@
 #include "uwot_hnsw_utils.h"
 #include "uwot_progress_utils.h"
 #include "uwot_crc32.h"
+#include "uwot_endian_utils.hpp"
 #include "lz4.h"
 
-// Endian-safe serialization utilities (inline for HNSW)
-namespace endian_utils {
-    bool is_little_endian() {
-        uint16_t test = 0x1234;
-        return *reinterpret_cast<uint8_t*>(&test) == 0x34;
-    }
-
-    template<typename T>
-    void to_little_endian(T& value) {
-        if (!is_little_endian()) {
-            uint8_t* bytes = reinterpret_cast<uint8_t*>(&value);
-            for (size_t i = 0; i < sizeof(T) / 2; ++i) {
-                std::swap(bytes[i], bytes[sizeof(T) - 1 - i]);
-            }
-        }
-    }
-
-    template<typename T>
-    void from_little_endian(T& value) {
-        to_little_endian(value); // Same operation - byte swap if needed
-    }
-
-    template<typename T>
-    void write_value(std::ostream& output, const T& value) {
-        T little_endian_value = value;
-        to_little_endian(little_endian_value);
-        output.write(reinterpret_cast<const char*>(&little_endian_value), sizeof(T));
-    }
-
-    template<typename T>
-    bool read_value(std::istream& input, T& value) {
-        input.read(reinterpret_cast<char*>(&value), sizeof(T));
-        if (input.good()) {
-            from_little_endian(value);
-            return true;
-        }
-        return false;
-    }
-}
 #include <fstream>
 #include <sstream>
 #include <chrono>
@@ -255,9 +217,9 @@ namespace hnsw_utils {
             // Write headers to output stream using endian-safe functions
             // std::cout << "[STREAM] HNSW Save: Writing headers - size: " << actual_size
 //                      << ", CRC32: " << std::hex << data_crc32 << std::dec << std::endl;
-            endian_utils::write_value(output, actual_size);
-            endian_utils::write_value(output, actual_size);
-            endian_utils::write_value(output, data_crc32);
+            uwot::endian_utils::write_value(output, actual_size);
+            uwot::endian_utils::write_value(output, actual_size);
+            uwot::endian_utils::write_value(output, data_crc32);
 
             // Check if header write was successful
             if (!output.good()) {
@@ -306,9 +268,9 @@ namespace hnsw_utils {
 
             // Read headers using endian-safe functions for compatibility with existing format
             uint32_t original_size, compressed_size, expected_crc32;
-            if (!endian_utils::read_value(input, original_size) ||
-                !endian_utils::read_value(input, compressed_size) ||
-                !endian_utils::read_value(input, expected_crc32)) {
+            if (!uwot::endian_utils::read_value(input, original_size) ||
+                !uwot::endian_utils::read_value(input, compressed_size) ||
+                !uwot::endian_utils::read_value(input, expected_crc32)) {
                 throw std::runtime_error("Failed to read HNSW headers - stream error or EOF");
             }
 

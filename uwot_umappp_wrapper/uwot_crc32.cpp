@@ -52,7 +52,7 @@ namespace crc_utils {
         0xb40bbe37, 0xc30c8ea1, 0x5a05df1b, 0x2d02ef8d
     };
 
-    uint32_t compute_crc32(const void* data, size_t length) {
+    uint32_t compute_crc32(const void* data, size_t length) noexcept {
         uint32_t crc = 0xFFFFFFFF;
         const uint8_t* bytes = static_cast<const uint8_t*>(data);
 
@@ -63,7 +63,7 @@ namespace crc_utils {
         return crc ^ 0xFFFFFFFF;
     }
 
-    uint32_t compute_file_crc32(const std::string& filename) {
+    uint32_t compute_file_crc32(const std::string& filename) noexcept {
         std::ifstream file(filename, std::ios::binary);
         if (!file.is_open()) {
             return 0;
@@ -88,17 +88,17 @@ namespace crc_utils {
         return crc ^ 0xFFFFFFFF;
     }
 
-    bool validate_crc32(const void* data, size_t length, uint32_t expected_crc) {
+    bool validate_crc32(const void* data, size_t length, uint32_t expected_crc) noexcept {
         uint32_t computed_crc = compute_crc32(data, length);
         return computed_crc == expected_crc;
     }
 
-    bool validate_file_crc32(const std::string& filename, uint32_t expected_crc) {
+    bool validate_file_crc32(const std::string& filename, uint32_t expected_crc) noexcept {
         uint32_t computed_crc = compute_file_crc32(filename);
         return computed_crc == expected_crc;
     }
 
-    uint32_t combine_crc32(uint32_t crc1, uint32_t crc2, size_t len2) {
+    uint32_t combine_crc32(uint32_t crc1, uint32_t crc2, size_t len2) noexcept {
         // Combine two CRC32 values for concatenated data
         for (size_t i = 0; i < len2; ++i) {
             crc1 = crc32_table[(crc1 ^ 0) & 0xFF] ^ (crc1 >> 8);
@@ -106,13 +106,13 @@ namespace crc_utils {
         return crc1 ^ crc2;
     }
 
-    std::string crc32_to_string(uint32_t crc) {
+    std::string crc32_to_string(uint32_t crc) noexcept {
         char hex_str[9];
         snprintf(hex_str, sizeof(hex_str), "%08X", crc);
         return std::string(hex_str);
     }
 
-    uint32_t string_to_crc32(const std::string& str) {
+    uint32_t string_to_crc32(const std::string& str) noexcept {
         // Simple hash function for string to CRC32 conversion
         // Note: This is NOT the actual CRC32 computation of the string content
         // It's used for generating deterministic CRC-like values from strings

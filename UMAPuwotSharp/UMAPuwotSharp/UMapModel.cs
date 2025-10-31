@@ -849,13 +849,13 @@ namespace UMAPuwotSharp
                     _activeCallbacks.Add(nativeCallback);
                 }
 
-                result = CallFitWithProgressV2(_nativeModel, flatData, (long)nSamples, (long)nFeatures, embeddingDimension, nNeighbors, minDist, spread, nEpochs, metric, embedding, nativeCallback, forceExactKnn ? 1 : 0, hnswM, hnswEfConstruction, hnswEfSearch, randomSeed, autoHNSWParam ? 1 : 0, localConnectivity, bandwidth, AlwaysUseSpectral ? 1 : 0);
+                result = CallFitWithProgressV2(_nativeModel, flatData, (long)nSamples, (long)nFeatures, embeddingDimension, nNeighbors, minDist, spread, nEpochs, metric, embedding, nativeCallback, forceExactKnn ? 1 : 0, hnswM, hnswEfConstruction, hnswEfSearch, randomSeed, autoHNSWParam ? 1 : 0, localConnectivity, bandwidth, AlwaysUseSpectral ? 1 : -1);
             }
             else
             {
                 // CRITICAL FIX: Always use unified pipeline function (even without progress callback)
                 // to ensure HNSW and exact use same normalized data - prevents MSE ~74 issue
-                result = CallFitWithProgressV2(_nativeModel, flatData, (long)nSamples, (long)nFeatures, embeddingDimension, nNeighbors, minDist, spread, nEpochs, metric, embedding, null, forceExactKnn ? 1 : 0, hnswM, hnswEfConstruction, hnswEfSearch, randomSeed, autoHNSWParam ? 1 : 0, localConnectivity, bandwidth, AlwaysUseSpectral ? 1 : 0);
+                result = CallFitWithProgressV2(_nativeModel, flatData, (long)nSamples, (long)nFeatures, embeddingDimension, nNeighbors, minDist, spread, nEpochs, metric, embedding, null, forceExactKnn ? 1 : 0, hnswM, hnswEfConstruction, hnswEfSearch, randomSeed, autoHNSWParam ? 1 : 0, localConnectivity, bandwidth, AlwaysUseSpectral ? 1 : -1);
             }
 
             ThrowIfError(result);

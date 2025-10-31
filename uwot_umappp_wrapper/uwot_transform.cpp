@@ -326,7 +326,7 @@ namespace transform_utils {
                                 distance = std::sqrt(std::max(0.0f, distance));
                                 break;
                             case UWOT_METRIC_COSINE:
-                                distance = std::max(0.0f, std::min(2.0f, 1.0f + distance));
+                                distance = std::clamp(1.0f + distance, 0.0f, 2.0f);
                                 break;
                             case UWOT_METRIC_MANHATTAN:
                                 distance = std::max(0.0f, distance);
@@ -451,7 +451,7 @@ namespace transform_utils {
                                 // HNSW already returns actual Euclidean distance - no conversion needed
                                 break;
                             case UWOT_METRIC_COSINE:
-                                distance = std::max(0.0f, std::min(2.0f, 1.0f + distance));
+                                distance = std::clamp(1.0f + distance, 0.0f, 2.0f);
                                 break;
                             case UWOT_METRIC_MANHATTAN:
                                 distance = std::max(0.0f, distance);
@@ -864,8 +864,9 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
             }
         }
 
-    } catch (...) {
-        // Fallback: simple exponential decay
+    } catch (const std::exception& e) {
+        // Fallback: simple exponential decay with proper error reporting
+        send_error_to_callback(("Error in smooth_knn processing: " + std::string(e.what())).c_str());
         double weight_sum = 0.0;
         for (int i = 0; i < k; ++i) {
             weights_double[i] = std::exp(-dist_double[i]);
@@ -882,5 +883,9 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
                 weights[i] = 1.0f / static_cast<float>(k);
             }
         }
+    } catch (...) {
+        // Catch-all for non-standard exceptions - report and re-throw
+        send_error_to_callback("Unknown error during smooth_knn processing in transform.");
+        throw; // Re-throw to ensure critical errors are not silently caught
     }
 }

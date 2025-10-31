@@ -1,5 +1,7 @@
 #include "uwot_persistence.h"
 #include "uwot_progress_utils.h"
+#include "uwot_endian_utils.hpp"
+#include "uwot_constants.hpp"
 #include "lz4.h"
 #include <algorithm>
 #include <vector>
@@ -8,45 +10,8 @@
 #include <sstream>
 
 namespace persistence_utils {
-
-    // Endian-safe serialization utilities
-    namespace endian_utils {
-
-        // Check if system is little-endian
-        inline bool is_little_endian() {
-            uint16_t test = 0x1234;
-            return *reinterpret_cast<uint8_t*>(&test) == 0x34;
-        }
-
-        // Convert to/from little-endian (same operation: swap if big-endian)
-        template<typename T>
-        inline void convert_endian(T& value) {
-            if (!is_little_endian()) {
-                uint8_t* bytes = reinterpret_cast<uint8_t*>(&value);
-                for (size_t i = 0; i < sizeof(T) / 2; ++i) {
-                    std::swap(bytes[i], bytes[sizeof(T) - 1 - i]);
-                }
-            }
-        }
-
-        // Safe write with endian conversion
-        template<typename T>
-        inline void write_value(std::ostream& stream, const T& value) {
-            T temp = value;
-            convert_endian(temp);
-            stream.write(reinterpret_cast<const char*>(&temp), sizeof(T));
-        }
-
-        // Safe read with endian conversion
-        template<typename T>
-        inline bool read_value(std::istream& stream, T& value) {
-            if (!stream.read(reinterpret_cast<char*>(&value), sizeof(T))) {
-                return false;
-            }
-            convert_endian(value);
-            return true;
-        }
-    } // namespace endian_utils
+    using namespace uwot::endian_utils;
+    using namespace uwot::constants;
 
 
     void save_hnsw_to_stream_compressed(std::ostream& output, hnswlib::HierarchicalNSW<float>* hnsw_index) {
@@ -79,8 +44,8 @@ namespace persistence_utils {
             uint32_t final_compressed_size = static_cast<uint32_t>(compressed_size);
 
             // Write headers to output stream using endian-safe functions
-            endian_utils::write_value(output, uncompressed_size);
-            endian_utils::write_value(output, final_compressed_size);
+            uwot::endian_utils::write_value(output, uncompressed_size);
+            uwot::endian_utils::write_value(output, final_compressed_size);
 
             // Write compressed data to output stream
             output.write(compressed_data.data(), final_compressed_size);
@@ -111,8 +76,8 @@ namespace persistence_utils {
 
             // Read compression headers using endian-safe functions (must match save format)
             uint32_t uncompressed_size = 0, compressed_size = 0;
-            if (!endian_utils::read_value(input, uncompressed_size) ||
-                !endian_utils::read_value(input, compressed_size)) {
+            if (!uwot::endian_utils::read_value(input, uncompressed_size) ||
+                !uwot::endian_utils::read_value(input, compressed_size)) {
                 throw std::runtime_error("Failed to read HNSW compression headers - stream error or EOF");
             }
 
@@ -122,8 +87,8 @@ namespace persistence_utils {
             }
 
             // Security validation (following PacMap pattern)
-            const uint32_t MAX_DECOMPRESSED_SIZE = 100 * 1024 * 1024; // 100MB limit
-            const uint32_t MAX_COMPRESSED_SIZE = 80 * 1024 * 1024;    // 80MB limit
+            const uint32_t max_decompressed_size = MAX_DECOMPRESSED_SIZE;
+            const uint32_t max_compressed_size = MAX_COMPRESSED_SIZE;
 
             if (uncompressed_size > MAX_DECOMPRESSED_SIZE) {
                 throw std::runtime_error("HNSW uncompressed size too large (potential corruption)");
@@ -180,71 +145,71 @@ namespace persistence_utils {
             // Magic number and version
             constexpr uint32_t MAGIC = 0x554D4150; // "UMAP"
             constexpr uint32_t FORMAT_VERSION = 1;
-            endian_utils::write_value(file, MAGIC);
-            endian_utils::write_value(file, FORMAT_VERSION);
+            uwot::endian_utils::write_value(file, MAGIC);
+            uwot::endian_utils::write_value(file, FORMAT_VERSION);
             file.write(UWOT_WRAPPER_VERSION_STRING, 16);
 
             // Basic parameters
-            endian_utils::write_value(file, model->n_vertices);
-            endian_utils::write_value(file, model->n_dim);
-            endian_utils::write_value(file, model->embedding_dim);
-            endian_utils::write_value(file, model->n_neighbors);
-            endian_utils::write_value(file, model->min_dist);
-            endian_utils::write_value(file, model->spread);
-            endian_utils::write_value(file, model->local_connectivity);
-            endian_utils::write_value(file, model->bandwidth);
-            endian_utils::write_value(file, static_cast<int>(model->metric));
+            uwot::endian_utils::write_value(file, model->n_vertices);
+            uwot::endian_utils::write_value(file, model->n_dim);
+            uwot::endian_utils::write_value(file, model->embedding_dim);
+            uwot::endian_utils::write_value(file, model->n_neighbors);
+            uwot::endian_utils::write_value(file, model->min_dist);
+            uwot::endian_utils::write_value(file, model->spread);
+            uwot::endian_utils::write_value(file, model->local_connectivity);
+            uwot::endian_utils::write_value(file, model->bandwidth);
+            uwot::endian_utils::write_value(file, static_cast<int>(model->metric));
 
             // HNSW parameters
-            endian_utils::write_value(file, model->hnsw_M);
-            endian_utils::write_value(file, model->hnsw_ef_construction);
-            endian_utils::write_value(file, model->hnsw_ef_search);
+            uwot::endian_utils::write_value(file, model->hnsw_M);
+            uwot::endian_utils::write_value(file, model->hnsw_ef_construction);
+            uwot::endian_utils::write_value(file, model->hnsw_ef_search);
 
             // Fast transform data
-            endian_utils::write_value(file, static_cast<int>(model->knn_backend));
-            endian_utils::write_value(file, model->has_fast_transform_data);
+            uwot::endian_utils::write_value(file, static_cast<int>(model->knn_backend));
+            uwot::endian_utils::write_value(file, model->has_fast_transform_data);
 
             if (model->has_fast_transform_data) {
                 const size_t rho_size = model->rho.size();
-                endian_utils::write_value(file, rho_size);
-                for (float v : model->rho) endian_utils::write_value(file, v);
+                uwot::endian_utils::write_value(file, rho_size);
+                for (float v : model->rho) uwot::endian_utils::write_value(file, v);
 
                 const size_t sigma_size = model->sigma.size();
-                endian_utils::write_value(file, sigma_size);
-                for (float v : model->sigma) endian_utils::write_value(file, v);
+                uwot::endian_utils::write_value(file, sigma_size);
+                for (float v : model->sigma) uwot::endian_utils::write_value(file, v);
             }
             else {
                 constexpr size_t zero = 0;
-                endian_utils::write_value(file, zero);
-                endian_utils::write_value(file, zero);
+                uwot::endian_utils::write_value(file, zero);
+                uwot::endian_utils::write_value(file, zero);
             }
 
             // Neighbor statistics
-            endian_utils::write_value(file, model->mean_original_distance);
-            endian_utils::write_value(file, model->std_original_distance);
-            endian_utils::write_value(file, model->min_original_distance);
-            endian_utils::write_value(file, model->p95_original_distance);
-            endian_utils::write_value(file, model->p99_original_distance);
-            endian_utils::write_value(file, model->mild_original_outlier_threshold);
-            endian_utils::write_value(file, model->extreme_original_outlier_threshold);
-            endian_utils::write_value(file, model->median_original_distance);
-            endian_utils::write_value(file, model->exact_match_threshold);
-            endian_utils::write_value(file, model->hnsw_recall_percentage);
+            uwot::endian_utils::write_value(file, model->mean_original_distance);
+            uwot::endian_utils::write_value(file, model->std_original_distance);
+            uwot::endian_utils::write_value(file, model->min_original_distance);
+            uwot::endian_utils::write_value(file, model->p95_original_distance);
+            uwot::endian_utils::write_value(file, model->p99_original_distance);
+            uwot::endian_utils::write_value(file, model->mild_original_outlier_threshold);
+            uwot::endian_utils::write_value(file, model->extreme_original_outlier_threshold);
+            uwot::endian_utils::write_value(file, model->median_original_distance);
+            uwot::endian_utils::write_value(file, model->exact_match_threshold);
+            uwot::endian_utils::write_value(file, model->hnsw_recall_percentage);
 
             // Normalization
             const bool has_normalization = !model->feature_means.empty() && !model->feature_stds.empty();
-            endian_utils::write_value(file, has_normalization);
+            uwot::endian_utils::write_value(file, has_normalization);
             if (has_normalization) {
-                for (float v : model->feature_means) endian_utils::write_value(file, v);
-                for (float v : model->feature_stds) endian_utils::write_value(file, v);
-                endian_utils::write_value(file, model->normalization_mode);
+                for (float v : model->feature_means) uwot::endian_utils::write_value(file, v);
+                for (float v : model->feature_stds) uwot::endian_utils::write_value(file, v);
+                uwot::endian_utils::write_value(file, model->normalization_mode);
             }
 
             // Embedding storage (currently always saved for reliability)
             const size_t embedding_size = model->embedding.size();
             const bool save_embedding = true;
-            endian_utils::write_value(file, embedding_size);
-            endian_utils::write_value(file, save_embedding);
+            uwot::endian_utils::write_value(file, embedding_size);
+            uwot::endian_utils::write_value(file, save_embedding);
 
             if (save_embedding && embedding_size > 0) {
                 const size_t uncompressed_bytes = embedding_size * sizeof(float);
@@ -260,32 +225,32 @@ namespace persistence_utils {
                 uint32_t uncompressed_size = static_cast<uint32_t>(uncompressed_bytes);
                 uint32_t comp_size = (compressed_bytes > 0) ? static_cast<uint32_t>(compressed_bytes) : 0;
 
-                endian_utils::write_value(file, uncompressed_size);
-                endian_utils::write_value(file, comp_size);
+                uwot::endian_utils::write_value(file, uncompressed_size);
+                uwot::endian_utils::write_value(file, comp_size);
 
                 if (comp_size > 0) {
                     file.write(compressed_data.data(), compressed_bytes);
                 }
                 else {
                     for (float v : model->embedding) {
-                        endian_utils::write_value(file, v);
+                        uwot::endian_utils::write_value(file, v);
                     }
                 }
             }
             else {
                 constexpr uint32_t zero = 0;
-                endian_utils::write_value(file, zero);
-                endian_utils::write_value(file, zero);
+                uwot::endian_utils::write_value(file, zero);
+                uwot::endian_utils::write_value(file, zero);
             }
 
             // k-NN data
             constexpr bool needs_knn = true;
-            endian_utils::write_value(file, needs_knn);
+            uwot::endian_utils::write_value(file, needs_knn);
 
             if (needs_knn) {
                 const auto write_vec = [&file](const auto& vec) {
-                    endian_utils::write_value(file, vec.size());
-                    for (const auto& v : vec) endian_utils::write_value(file, v);
+                    uwot::endian_utils::write_value(file, vec.size());
+                    for (const auto& v : vec) uwot::endian_utils::write_value(file, v);
                     };
 
                 write_vec(model->nn_indices);
@@ -294,20 +259,20 @@ namespace persistence_utils {
             }
 
             // Raw data
-            endian_utils::write_value(file, model->force_exact_knn);
+            uwot::endian_utils::write_value(file, model->force_exact_knn);
             const bool has_raw_data = model->force_exact_knn && !model->raw_data.empty();
-            endian_utils::write_value(file, has_raw_data);
+            uwot::endian_utils::write_value(file, has_raw_data);
             if (has_raw_data) {
-                endian_utils::write_value(file, model->raw_data.size());
-                for (float v : model->raw_data) endian_utils::write_value(file, v);
+                uwot::endian_utils::write_value(file, model->raw_data.size());
+                for (float v : model->raw_data) uwot::endian_utils::write_value(file, v);
             }
 
             // HNSW indices
             const bool save_original_index = model->original_space_index != nullptr;
             const bool save_embedding_index = model->embedding_space_index != nullptr && !model->always_save_embedding_data;
 
-            endian_utils::write_value(file, save_original_index);
-            endian_utils::write_value(file, save_embedding_index);
+            uwot::endian_utils::write_value(file, save_original_index);
+            uwot::endian_utils::write_value(file, save_embedding_index);
 
             auto save_hnsw = [&file](const auto& index, const char* name) {
                 try {
@@ -315,7 +280,7 @@ namespace persistence_utils {
                 }
                 catch (...) {
                     constexpr size_t zero = 0;
-                    endian_utils::write_value(file, zero);
+                    uwot::endian_utils::write_value(file, zero);
                     send_warning_to_callback((std::string(name) + " HNSW save failed").c_str());
                 }
                 };
@@ -325,7 +290,7 @@ namespace persistence_utils {
             }
             else {
                 constexpr size_t zero = 0;
-                endian_utils::write_value(file, zero);
+                uwot::endian_utils::write_value(file, zero);
             }
 
             if (save_embedding_index) {
@@ -333,13 +298,13 @@ namespace persistence_utils {
             }
             else {
                 constexpr size_t zero = 0;
-                endian_utils::write_value(file, zero);
+                uwot::endian_utils::write_value(file, zero);
             }
 
             // CRCs
-            endian_utils::write_value(file, model->original_space_crc);
-            endian_utils::write_value(file, model->embedding_space_crc);
-            endian_utils::write_value(file, model->model_version_crc);
+            uwot::endian_utils::write_value(file, model->original_space_crc);
+            uwot::endian_utils::write_value(file, model->embedding_space_crc);
+            uwot::endian_utils::write_value(file, model->model_version_crc);
 
             file.close();
             return UWOT_SUCCESS;
@@ -364,10 +329,10 @@ namespace persistence_utils {
         try {
             // Magic and version
             uint32_t magic = 0, format_version = 0;
-            if (!endian_utils::read_value(file, magic) || magic != 0x554D4150) {
+            if (!uwot::endian_utils::read_value(file, magic) || magic != 0x554D4150) {
                 throw std::runtime_error("Invalid magic number");
             }
-            endian_utils::read_value(file, format_version);
+            uwot::endian_utils::read_value(file, format_version);
 
             char version[17] = { 0 };
             file.read(version, 16);
@@ -376,7 +341,7 @@ namespace persistence_utils {
             }
 
             // Basic parameters
-            auto read = [&file](auto& v) { return endian_utils::read_value(file, v); };
+            auto read = [&file](auto& v) { return uwot::endian_utils::read_value(file, v); };
             if (!read(model->n_vertices) || !read(model->n_dim) || !read(model->embedding_dim) ||
                 !read(model->n_neighbors) || !read(model->min_dist) || !read(model->spread) ||
                 !read(model->local_connectivity) || !read(model->bandwidth)) {
@@ -513,7 +478,7 @@ namespace persistence_utils {
             auto load_hnsw = [&file, model](bool flag, std::unique_ptr<hnswlib::HierarchicalNSW<float>>& index_ptr, std::unique_ptr<hnsw_utils::SpaceFactory>& factory_ptr, UwotMetric metric, int dim, const char* name) {
                 if (!flag) {
                     size_t zero = 0;
-                    endian_utils::read_value(file, zero);
+                    uwot::endian_utils::read_value(file, zero);
                     return;
                 }
 
@@ -566,9 +531,9 @@ namespace persistence_utils {
             }
 
             // CRCs
-            endian_utils::read_value(file, model->original_space_crc);
-            endian_utils::read_value(file, model->embedding_space_crc);
-            endian_utils::read_value(file, model->model_version_crc);
+            uwot::endian_utils::read_value(file, model->original_space_crc);
+            uwot::endian_utils::read_value(file, model->embedding_space_crc);
+            uwot::endian_utils::read_value(file, model->model_version_crc);
 
             model->is_fitted = true;
             file.close();

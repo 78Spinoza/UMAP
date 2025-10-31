@@ -206,7 +206,8 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
 
             // Set up progress callback for HNSW path
             if (wrapped_callback) {
-                options.progress_callback = [wrapped_callback](int current_epoch, int total_epochs, const double* embedding) {
+                options.progress_callback = [wrapped_callback](int current_epoch, int total_epochs, const void* embedding) {
+                    (void)embedding; // Unused parameter
                     // Special case: epoch=-1 indicates KNN smoothing report from initialize.hpp
                     if (current_epoch == -1) {
                         wrapped_callback("KNN Smoothing Verified", 0, 100, 55.0f,
@@ -436,7 +437,8 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
 
                 // Set up progress callback in umappp options before initialization
                 if (wrapped_callback) {
-                    exact_options.progress_callback = [wrapped_callback](int current_epoch, int total_epochs, const double* embedding) {
+                    exact_options.progress_callback = [wrapped_callback](int current_epoch, int total_epochs, const void* embedding) {
+                        (void)embedding; // Unused parameter
                         // Special case: epoch=-1 indicates KNN smoothing report from initialize.hpp
                         if (current_epoch == -1) {
                             wrapped_callback("KNN Smoothing Verified (Exact)", 0, 100, 55.0f,
@@ -846,7 +848,7 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
                         case UWOT_METRIC_COSINE:
                             // InnerProductSpace returns -inner_product for unit vectors
                             // Convert to cosine distance: distance = 1 - similarity
-                            distance = std::max(0.0f, std::min(2.0f, 1.0f + distance));
+                            distance = std::clamp(1.0f + distance, 0.0f, 2.0f);
                             break;
                         case UWOT_METRIC_MANHATTAN:
                             // L1Space returns direct Manhattan distance
@@ -875,22 +877,7 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
                         }
                     }
 
-                    // FAST TRANSFORM OPTIMIZATION: Compute sigma[i] using stored rho
-                    // Binary search for sigma (bandwidth parameter) - same as smooth_knn
-                    float lo = 0, hi = 1e9;
-                    const double local_connectivity = 1.3; // Updated for better local structure
-
-                    for (int it = 0; it < 32; ++it) {
-                        float mid = (lo + hi) / 2;
-                        float sum = 0;
-                        for (int k_check = 0; k_check < n_neighbors; ++k_check) {
-                            float dist_check = static_cast<float>(nn_distances[static_cast<size_t>(i) * static_cast<size_t>(n_neighbors) + static_cast<size_t>(k_check)]);
-                            float val = (dist_check - model->rho[i]) / mid;
-                            sum += (val <= 0) ? 1.0f : std::exp(-val);
-                        }
-                        (sum >= local_connectivity) ? hi = mid : lo = mid;
-                    }
-                    model->sigma[i] = (lo + hi) / 2;
+                    // Note: sigma calculation removed - delegated to umappp::initialize for consistency
                 }
                 catch (...) {
                     // Fallback for any HNSW errors
@@ -899,26 +886,7 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
                         nn_distances[static_cast<size_t>(i) * static_cast<size_t>(n_neighbors) + static_cast<size_t>(k)] = 1000.0;
                     }
 
-                    // FAST TRANSFORM OPTIMIZATION: Compute rho/sigma for fallback case
-                    if (n_neighbors > 0) {
-                        model->rho[i] = 1000.0f; // Fallback rho
-
-                        // Binary search for sigma (bandwidth parameter)
-                        float lo = 0, hi = 1e9;
-                        const double local_connectivity = 1.3; // Updated for better local structure
-
-                        for (int it = 0; it < 32; ++it) {
-                            float mid = (lo + hi) / 2;
-                            float sum = 0;
-                            for (int k_check = 0; k_check < n_neighbors; ++k_check) {
-                                float dist_check = static_cast<float>(nn_distances[static_cast<size_t>(i) * static_cast<size_t>(n_neighbors) + static_cast<size_t>(k_check)]);
-                                float val = (dist_check - model->rho[i]) / mid;
-                                sum += (val <= 0) ? 1.0f : std::exp(-val);
-                            }
-                            (sum >= local_connectivity) ? hi = mid : lo = mid;
-                        }
-                        model->sigma[i] = (lo + hi) / 2;
-                    }
+                    // Note: rho/sigma calculation removed - delegated to umappp::initialize for consistency
                 }
 
                 // Progress reporting more frequently for large datasets (>=10k)
@@ -1117,7 +1085,7 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
 
                 // Binary search for sigma (bandwidth parameter) - same as smooth_knn
                 float lo = 0, hi = 1e9;
-                const double local_connectivity = 1.3; // Updated for better local structure
+                const double local_connectivity_used = model->local_connectivity; // Use model's local_connectivity parameter
 
                 for (int it = 0; it < 32; ++it) {
                     float mid = (lo + hi) / 2;
@@ -1126,7 +1094,7 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
                         float val = (point_distances[k] - model->rho[i]) / mid;
                         sum += (val <= 0) ? 1.0f : std::exp(-val);
                     }
-                    (sum >= local_connectivity) ? hi = mid : lo = mid;
+                    (sum >= local_connectivity_used) ? hi = mid : lo = mid;
                 }
                 model->sigma[i] = (lo + hi) / 2;
             }

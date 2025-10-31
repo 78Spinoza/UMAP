@@ -2,6 +2,7 @@
 
 #include "uwot_simple_wrapper.h"
 #include "uwot_hnsw_utils.h"
+#include "uwot_constants.hpp"
 #include <memory>
 #include <vector>
 
@@ -137,7 +138,7 @@ struct UwotModel {
         // Embedding data preservation
         always_save_embedding_data(false),
         // CRC32 validation
-        original_space_crc(0), embedding_space_crc(0), model_version_crc(0x5A4D4F44), // "UMOD" hex
+        original_space_crc(0), embedding_space_crc(0), model_version_crc(uwot::constants::UMOD_FILE_MAGIC), // "UMOD" hex
         // Fast transform optimization
         knn_backend(KnnBackend::HNSW), has_fast_transform_data(false) {
 
