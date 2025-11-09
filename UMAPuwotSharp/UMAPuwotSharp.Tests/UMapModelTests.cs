@@ -431,6 +431,72 @@ namespace UMAPuwotSharp.Tests
         }
 
         /// <summary>
+        /// Test save/load with TransformWithSafety to ensure all indices are properly persisted
+        /// </summary>
+        [TestMethod]
+        public void Test_Persistence_With_TransformWithSafety()
+        {
+            var modelPath = "test_model_safety.bin";
+
+            try
+            {
+                float[,] testPoint = GenerateSingleSample(TestFeatures, seed: 888);
+
+                // Train and save model
+                using (var model = new UMapModel())
+                {
+                    var embedding = model.Fit(_testData,
+                        embeddingDimension: 2,
+                        nEpochs: 30,
+                        forceExactKnn: false);
+
+                    Assert.IsTrue(model.IsFitted);
+
+                    // Test TransformWithSafety with original model
+                    var originalResults = model.TransformWithSafety(testPoint);
+                    Assert.IsNotNull(originalResults);
+                    Assert.AreEqual(1, originalResults.Length);
+
+                    Console.WriteLine($"Original - Confidence: {originalResults[0].ConfidenceScore:F3}, " +
+                                    $"Severity: {originalResults[0].Severity}, " +
+                                    $"Percentile: {originalResults[0].PercentileRank:F1}%");
+
+                    // Save model
+                    model.Save(modelPath);
+                }
+
+                // Load and test TransformWithSafety with loaded model
+                using (var loadedModel = UMapModel.Load(modelPath))
+                {
+                    Assert.IsTrue(loadedModel.IsFitted);
+
+                    // Test TransformWithSafety with loaded model
+                    var loadedResults = loadedModel.TransformWithSafety(testPoint);
+
+                    Assert.IsNotNull(loadedResults);
+                    Assert.AreEqual(1, loadedResults.Length);
+
+                    Console.WriteLine($"Loaded  - Confidence: {loadedResults[0].ConfidenceScore:F3}, " +
+                                    $"Severity: {loadedResults[0].Severity}, " +
+                                    $"Percentile: {loadedResults[0].PercentileRank:F1}%");
+
+                    // Verify projection coordinates match
+                    Assert.AreEqual(2, loadedResults[0].ProjectionCoordinates.Length);
+
+                    Console.WriteLine("✅ TransformWithSafety works correctly after save/load");
+                }
+            }
+            finally
+            {
+                // Cleanup
+                if (System.IO.File.Exists(modelPath))
+                {
+                    System.IO.File.Delete(modelPath);
+                }
+            }
+        }
+
+        /// <summary>
         /// Test parameter validation
         /// </summary>
         [TestMethod]

@@ -8,10 +8,14 @@
 #include <random>
 #include <chrono>
 #include <sstream>
+#include <limits>
 
 namespace persistence_utils {
     using namespace uwot::endian_utils;
     using namespace uwot::constants;
+
+    // LZ4 uses 'int' which is 32-bit signed, so max safe size is INT_MAX
+    static const size_t LZ4_MAX_SIZE = 2147483647; // INT_MAX = 2^31 - 1
 
 
     void save_hnsw_to_stream_compressed(std::ostream& output, hnswlib::HierarchicalNSW<float>* hnsw_index) {
@@ -27,10 +31,19 @@ namespace persistence_utils {
 
             // Get the HNSW data as string
             std::string hnsw_data = hnsw_data_stream.str();
-            uint32_t uncompressed_size = static_cast<uint32_t>(hnsw_data.size());
+            size_t uncompressed_size = hnsw_data.size();
+
+            // LZ4 uses 'int' which is 32-bit signed (max ~2GB on most platforms)
+            // Check for overflow before calling LZ4
+            if (uncompressed_size > LZ4_MAX_SIZE) {
+                throw std::runtime_error("HNSW data too large for LZ4 compression (exceeds 2GB int limit)");
+            }
 
             // Compress with LZ4
             int max_compressed_size = LZ4_compressBound(static_cast<int>(uncompressed_size));
+            if (max_compressed_size <= 0) {
+                throw std::runtime_error("LZ4_compressBound failed - data too large");
+            }
             std::vector<char> compressed_data(max_compressed_size);
 
             int compressed_size = LZ4_compress_default(
@@ -41,11 +54,14 @@ namespace persistence_utils {
                 throw std::runtime_error("LZ4 compression failed for HNSW data");
             }
 
-            uint32_t final_compressed_size = static_cast<uint32_t>(compressed_size);
+            size_t final_compressed_size = static_cast<size_t>(compressed_size);
 
             // Write headers to output stream using endian-safe functions
-            uwot::endian_utils::write_value(output, uncompressed_size);
-            uwot::endian_utils::write_value(output, final_compressed_size);
+            // Using uint32_t for backward compatibility (fits within 2GB LZ4 limit anyway)
+            uint32_t uncompressed_size_32 = static_cast<uint32_t>(uncompressed_size);
+            uint32_t final_compressed_size_32 = static_cast<uint32_t>(final_compressed_size);
+            uwot::endian_utils::write_value(output, uncompressed_size_32);
+            uwot::endian_utils::write_value(output, final_compressed_size_32);
 
             // Write compressed data to output stream
             output.write(compressed_data.data(), final_compressed_size);
@@ -74,25 +90,52 @@ namespace persistence_utils {
                 throw std::runtime_error("Input stream is in bad state before reading");
             }
 
-            // Read compression headers using endian-safe functions (must match save format)
-            uint32_t uncompressed_size = 0, compressed_size = 0;
-            if (!uwot::endian_utils::read_value(input, uncompressed_size) ||
-                !uwot::endian_utils::read_value(input, compressed_size)) {
+            // Read compression headers using endian-safe functions
+            // OLD FORMAT (v3.40.0 and earlier): uint32_t sizes
+            // NEW FORMAT (v3.41.0+): uint64_t sizes
+            // For backward compatibility, we read as uint32_t (old format still in use)
+            uint32_t uncompressed_size_32 = 0, compressed_size_32 = 0;
+            if (!uwot::endian_utils::read_value(input, uncompressed_size_32) ||
+                !uwot::endian_utils::read_value(input, compressed_size_32)) {
                 throw std::runtime_error("Failed to read HNSW compression headers - stream error or EOF");
             }
 
+            uint64_t uncompressed_size_64 = uncompressed_size_32;
+            uint64_t compressed_size_64 = compressed_size_32;
+
             // Validate sizes - zero is allowed for empty HNSW data
-            if (uncompressed_size == 0 && compressed_size == 0) {
+            if (uncompressed_size_64 == 0 && compressed_size_64 == 0) {
                 return; // Successfully loaded empty HNSW
             }
 
-            // Security validation (following PacMap pattern)
-            if (uncompressed_size > MAX_DECOMPRESSED_SIZE) {
-                throw std::runtime_error("HNSW uncompressed size too large (potential corruption)");
+            // Security validation
+            if (uncompressed_size_64 > MAX_DECOMPRESSED_SIZE) {
+                std::string error = "HNSW uncompressed size too large: " + std::to_string(uncompressed_size_64) +
+                    " bytes (" + std::to_string(uncompressed_size_64 / 1024.0 / 1024.0) + " MB) exceeds limit of " +
+                    std::to_string(MAX_DECOMPRESSED_SIZE) + " bytes (" +
+                    std::to_string(MAX_DECOMPRESSED_SIZE / 1024.0 / 1024.0) + " MB). " +
+                    "This model requires increasing MAX_DECOMPRESSED_SIZE in uwot_constants.hpp.";
+                throw std::runtime_error(error);
             }
-            if (compressed_size > MAX_COMPRESSED_SIZE) {
-                throw std::runtime_error("HNSW compressed size too large (potential corruption)");
+            if (compressed_size_64 > MAX_COMPRESSED_SIZE) {
+                std::string error = "HNSW compressed size too large: " + std::to_string(compressed_size_64) +
+                    " bytes (" + std::to_string(compressed_size_64 / 1024.0 / 1024.0) + " MB) exceeds limit of " +
+                    std::to_string(MAX_COMPRESSED_SIZE) + " bytes (" +
+                    std::to_string(MAX_COMPRESSED_SIZE / 1024.0 / 1024.0) + " MB). " +
+                    "This model requires increasing MAX_COMPRESSED_SIZE in uwot_constants.hpp.";
+                throw std::runtime_error(error);
             }
+
+            // LZ4 uses 'int' for sizes - check for overflow
+            if (uncompressed_size_64 > LZ4_MAX_SIZE) {
+                throw std::runtime_error("HNSW uncompressed size exceeds LZ4 int limit (2GB)");
+            }
+            if (compressed_size_64 > LZ4_MAX_SIZE) {
+                throw std::runtime_error("HNSW compressed size exceeds LZ4 int limit (2GB)");
+            }
+
+            size_t uncompressed_size = static_cast<size_t>(uncompressed_size_64);
+            size_t compressed_size = static_cast<size_t>(compressed_size_64);
 
             // Read compressed data into buffer
             std::vector<char> compressed_data(compressed_size);
@@ -210,7 +253,16 @@ namespace persistence_utils {
 
             if (save_embedding && embedding_size > 0) {
                 const size_t uncompressed_bytes = embedding_size * sizeof(float);
+
+                // Check for LZ4 int overflow
+                if (uncompressed_bytes > LZ4_MAX_SIZE) {
+                    throw std::runtime_error("Embedding data too large for LZ4 compression (exceeds 2GB int limit)");
+                }
+
                 const int max_compressed_size = LZ4_compressBound(static_cast<int>(uncompressed_bytes));
+                if (max_compressed_size <= 0) {
+                    throw std::runtime_error("LZ4_compressBound failed for embedding data");
+                }
                 std::vector<char> compressed_data(max_compressed_size);
 
                 const int compressed_bytes = LZ4_compress_default(
@@ -422,15 +474,26 @@ namespace persistence_utils {
                 uint32_t uncompressed_size = 0, compressed_size = 0;
                 if (!read(uncompressed_size) || !read(compressed_size)) throw std::runtime_error("Failed to read embedding headers");
 
+                // Validate sizes against LZ4 limits
+                if (uncompressed_size > LZ4_MAX_SIZE) {
+                    throw std::runtime_error("Embedding uncompressed size exceeds LZ4 int limit (2GB)");
+                }
+                if (compressed_size > LZ4_MAX_SIZE) {
+                    throw std::runtime_error("Embedding compressed size exceeds LZ4 int limit (2GB)");
+                }
+
                 if (compressed_size > 0) {
                     std::vector<char> compressed_data(compressed_size);
                     file.read(compressed_data.data(), compressed_size);
-                    if (file.gcount() != compressed_size) throw std::runtime_error("Failed to read compressed embedding");
+                    if (file.gcount() != static_cast<std::streamsize>(compressed_size)) {
+                        throw std::runtime_error("Failed to read compressed embedding");
+                    }
 
                     const int decompressed = LZ4_decompress_safe(
                         compressed_data.data(),
                         reinterpret_cast<char*>(model->embedding.data()),
-                        compressed_size, uncompressed_size);
+                        static_cast<int>(compressed_size),
+                        static_cast<int>(uncompressed_size));
 
                     if (decompressed != static_cast<int>(uncompressed_size)) {
                         throw std::runtime_error("Embedding decompression failed");
@@ -489,9 +552,17 @@ namespace persistence_utils {
 
                     load_hnsw_from_stream_compressed(file, index_ptr.get(), factory_ptr->get_space());
                 }
+                catch (const std::exception& e) {
+                    index_ptr.reset();
+                    std::string error_msg = std::string(name) + " HNSW load failed: " + e.what();
+                    send_error_to_callback(error_msg.c_str());
+                    throw std::runtime_error(error_msg);
+                }
                 catch (...) {
                     index_ptr.reset();
-                    send_warning_to_callback((std::string(name) + " HNSW load failed").c_str());
+                    std::string error_msg = std::string(name) + " HNSW load failed with unknown exception";
+                    send_error_to_callback(error_msg.c_str());
+                    throw std::runtime_error(error_msg);
                 }
                 };
 
@@ -521,9 +592,11 @@ namespace persistence_utils {
                         model->embedding_space_index->addPoint(ptr, i);
                     }
                 }
-                catch (...) {
+                catch (const std::exception& e) {
                     model->embedding_space_index = nullptr;
-                    send_warning_to_callback("Embedding HNSW reconstruction failed");
+                    std::string error_msg = std::string("CRITICAL: Embedding HNSW reconstruction failed: ") + e.what();
+                    send_error_to_callback(error_msg.c_str());
+                    throw std::runtime_error(error_msg);
                 }
             }
 
@@ -531,6 +604,44 @@ namespace persistence_utils {
             uwot::endian_utils::read_value(file, model->original_space_crc);
             uwot::endian_utils::read_value(file, model->embedding_space_crc);
             uwot::endian_utils::read_value(file, model->model_version_crc);
+
+            // CRITICAL VALIDATION: Ensure ALL required components for TransformWithSafety are present
+
+            // 1. Check original_space_index (required for basic transform)
+            if (!model->original_space_index) {
+                throw std::runtime_error("CRITICAL: Model load failed - original_space_index is NULL. Transform operations will not work.");
+            }
+            if (model->original_space_index->cur_element_count == 0 ||
+                model->original_space_index->max_elements_ == 0) {
+                throw std::runtime_error("CRITICAL: Model load failed - original_space_index is uninitialized (no elements). Transform operations will not work.");
+            }
+
+            // 2. Check embedding_space_index (required for TransformWithSafety)
+            if (!model->embedding_space_index) {
+                if (!model->embedding.empty()) {
+                    throw std::runtime_error("CRITICAL: Model load failed - embedding_space_index is NULL but embedding data exists. "
+                        "HNSW index reconstruction failed. Check if embedding data is corrupted or model was saved with incompatible settings. "
+                        "TransformWithSafety will not work.");
+                } else {
+                    throw std::runtime_error("CRITICAL: Model load failed - embedding_space_index is NULL and no embedding data to rebuild from. "
+                        "Model file may be corrupted or incomplete. TransformWithSafety will not work.");
+                }
+            }
+            if (model->embedding_space_index->cur_element_count == 0 ||
+                model->embedding_space_index->max_elements_ == 0) {
+                throw std::runtime_error("CRITICAL: Model load failed - embedding_space_index is uninitialized (no elements loaded). "
+                    "TransformWithSafety will not work. Check model file integrity.");
+            }
+
+            // 3. Check embedding data (required for transform)
+            if (model->embedding.empty()) {
+                throw std::runtime_error("CRITICAL: Model load failed - embedding array is empty. Transform operations will not work.");
+            }
+            if (model->embedding.size() != static_cast<size_t>(model->n_vertices) * static_cast<size_t>(model->embedding_dim)) {
+                throw std::runtime_error("CRITICAL: Model load failed - embedding array size mismatch. Expected " +
+                    std::to_string(model->n_vertices * model->embedding_dim) + " but got " +
+                    std::to_string(model->embedding.size()));
+            }
 
             model->is_fitted = true;
             file.close();

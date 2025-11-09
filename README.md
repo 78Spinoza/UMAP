@@ -1647,6 +1647,7 @@ HNSW acceleration works with multiple distance metrics:
 
 | Version | Release Date | Key Features | Performance |
 |---------|--------------|--------------|-------------|
+| **3.41.0** | 2025-11-07 | **Fixed access violation on load**, **20x larger file support** (100MB→2GB), **LZ4 overflow protection**, **LoadWithCallbacks() API**, **Fail-fast HNSW validation**, **Save/load/TransformWithSafety test**, **Production persistence reliability** | Critical load fix + large model support |
 | **3.40.0** | 2025-10-31 | **InitializationMethod enum** (clear API), **Spectral default** (best quality out-of-the-box), **API clarity** (replaced boolean with enum), **Backward compatibility** (obsolete property), **Dynamic metadata** (model-extracted params), **Clean compilation** (zero warnings) | Initialization API enhancement |
 | **3.39.0** | 2025-10-27 | **AlwaysUseSpectral property** (force spectral init), **Eigen compilation fix** (MSVC + performance), **LocalConnectivity & Bandwidth integration**, **Bandwidth sweep testing**, Enhanced visualization titles, Spectral quality boost | Advanced algorithms revolution |
 | **3.37.0** | 2025-10-26 | **OpenMP parallelization** (4-5x transform speedup), **Single-point optimization** (12-15x speedup), **Stringstream persistence** (no temp files), **Windows DLL stability**, Thread-safe operations | Major performance revolution |

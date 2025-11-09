@@ -340,7 +340,7 @@ namespace UMAPuwotSharp
         #region Constants
 
         // Expected DLL version - must match C++ UWOT_WRAPPER_VERSION_STRING
-        private const string EXPECTED_DLL_VERSION = "3.40.0";
+        private const string EXPECTED_DLL_VERSION = "3.41.0";
 
         #endregion
 
@@ -425,7 +425,7 @@ namespace UMAPuwotSharp
         }
 
         /// <summary>
-        /// Loads an Enhanced UMAP model from a file
+        /// Loads an Enhanced UMAP model from a file (static method, no callbacks)
         /// </summary>
         /// <param name="filename">Path to the model file</param>
         /// <returns>A new UMapModel instance loaded from the specified file</returns>
@@ -450,6 +450,79 @@ namespace UMAPuwotSharp
             }
 
             return model;
+        }
+
+        /// <summary>
+        /// Loads an Enhanced UMAP model from a file with callback support for monitoring load progress/errors
+        /// </summary>
+        /// <param name="filename">Path to the model file</param>
+        /// <param name="progressCallback">Optional callback for progress and error messages during load</param>
+        /// <returns>A new UMapModel instance loaded from the specified file</returns>
+        /// <exception cref="ArgumentException">Thrown when filename is null or empty</exception>
+        /// <exception cref="FileNotFoundException">Thrown when the specified file does not exist</exception>
+        /// <exception cref="InvalidDataException">Thrown when the file cannot be loaded as a valid model</exception>
+        /// <example>
+        /// <code>
+        /// var model = UMapModel.LoadWithCallbacks("model.umap", (phase, current, total, percent, message) => {
+        ///     Console.WriteLine($"[{phase}] {message}");
+        /// });
+        /// </code>
+        /// </example>
+        public static UMapModel LoadWithCallbacks(string filename, ProgressCallback? progressCallback = null)
+        {
+            if (string.IsNullOrEmpty(filename))
+                throw new ArgumentException("Filename cannot be null or empty", nameof(filename));
+
+            if (!File.Exists(filename))
+                throw new FileNotFoundException($"Model file not found: {filename}");
+
+            // Register callback if provided
+            NativeProgressCallbackV2? nativeCallback = null;
+            if (progressCallback != null)
+            {
+                // Wrap the user's ProgressCallback into NativeProgressCallbackV2 format
+                nativeCallback = (phase, current, total, percent, message) =>
+                {
+                    progressCallback(phase, current, total, percent, message);
+                };
+
+                // Store reference to prevent GC
+                lock (_activeCallbacks)
+                {
+                    _activeCallbacks.Add(nativeCallback);
+                }
+
+                CallSetGlobalCallback(nativeCallback);
+            }
+
+            try
+            {
+                var model = new UMapModel();
+                // Replace the created model with loaded one
+                CallDestroy(model._nativeModel);
+                model._nativeModel = CallLoadModel(filename);
+
+                if (model._nativeModel == IntPtr.Zero)
+                {
+                    model.Dispose();
+                    throw new InvalidDataException($"Failed to load model from file: {filename}");
+                }
+
+                return model;
+            }
+            finally
+            {
+                // Clear callback after load
+                if (nativeCallback != null)
+                {
+                    CallClearGlobalCallback();
+
+                    lock (_activeCallbacks)
+                    {
+                        _activeCallbacks.Remove(nativeCallback);
+                    }
+                }
+            }
         }
 
         /// <summary>

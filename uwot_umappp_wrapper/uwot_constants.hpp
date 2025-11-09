@@ -22,8 +22,10 @@ namespace constants {
     constexpr uint32_t FINAL_CRC32_XOR = 0xFFFFFFFF;        // CRC32 final XOR value
 
     // File size limits (for safety)
-    constexpr uint32_t MAX_DECOMPRESSED_SIZE = 100 * 1024 * 1024;  // 100MB limit
-    constexpr uint32_t MAX_COMPRESSED_SIZE = 80 * 1024 * 1024;     // 80MB limit
+    // Note: Using size_t (64-bit) to avoid overflow, but LZ4 uses int (32-bit signed = 2GB max)
+    // So we cap at 2GB to stay within LZ4's safe range
+    constexpr size_t MAX_DECOMPRESSED_SIZE = static_cast<size_t>(2000) * 1024 * 1024;  // 2000MB (2GB) limit - safe for LZ4
+    constexpr size_t MAX_COMPRESSED_SIZE = static_cast<size_t>(1500) * 1024 * 1024;    // 1500MB limit - safe for LZ4
 
     // Dataset size thresholds for algorithm selection
     constexpr int LARGE_DATASET_THRESHOLD = 20000;           // Switch to random init

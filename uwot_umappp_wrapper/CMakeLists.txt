@@ -42,7 +42,7 @@ FetchContent_Declare(
 FetchContent_Declare(
   irlba
   GIT_REPOSITORY https://github.com/LTLA/CppIrlba
-  GIT_TAG master
+  GIT_TAG v3.0.0
 )
 
 FetchContent_Declare(

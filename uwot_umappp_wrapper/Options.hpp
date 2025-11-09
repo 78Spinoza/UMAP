@@ -107,7 +107,7 @@ struct Options {
     /**
      * Further options to pass to `irlba::compute()` for spectral initialization.
      */
-    irlba::Options initialize_spectral_irlba_options;
+    irlba::Options<> initialize_spectral_irlba_options;
 
     /**
      * Maximum absolute magnitude of the coordinates after spectral initialization.

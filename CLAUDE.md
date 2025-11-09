@@ -28,11 +28,9 @@ cd uwot_umappp_wrapper            # ALWAYS go to the folder first!
 
 **⚠️ CRITICAL: DLL goes directly to UMAPuwotSharp project root**
 ```bash
-# CORRECT - Copy DLL to project root
+# CORRECT - Copy both binaries to project root
 cp "C:\UMAP\uwot_umappp_wrapper\build\Release\uwot.dll" "C:\UMAP\UMAPuwotSharp\UMAPuwotSharp\uwot.dll"
-
-# Linux .so file location
-cp "C:\UMAP\uwot_umappp_wrapper\build-linux\libuwot.so" "C:\UMAP\UMAPuwotSharp\UMAPuwotSharp\runtimes\linux-x64\native\libuwot.so"
+cp "C:\UMAP\uwot_umappp_wrapper\build-linux\libuwot.so" "C:\UMAP\UMAPuwotSharp\UMAPuwotSharp\libuwot.so"
 
 # ❌ WRONG - Do NOT use runtimes folder for Windows DLL
 # "C:\UMAP\UMAPuwotSharp\UMAPuwotSharp\runtimes\win-x64\native\uwot.dll"  # DOES NOT EXIST

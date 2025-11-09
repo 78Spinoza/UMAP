@@ -12,7 +12,7 @@
     <!-- Enhanced NuGet metadata -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>UMAPuwotSharp</PackageId>
-    <Version>3.40.0</Version>
+    <Version>3.41.0</Version>
     <Authors>Amin Gholiha</Authors>
     <Company>ID Soft AB</Company>
     <Product>UMAPuwotSharp Enhanced with HNSW</Product>
@@ -25,7 +25,48 @@
     <PackageProjectUrl>https://github.com/78Spinoza/UMAP</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageReleaseNotes><![CDATA[
-🎉 MAJOR API ENHANCEMENT - UMAP v3.40.0: InitializationMethod Enum & Spectral Default
+🎉 CRITICAL FIX - UMAP v3.41.0: Model Persistence & Large File Support
+
+🚀 UPGRADE RECOMMENDED: Fixed critical load issues + 20x larger file support!
+
+🐛 CRITICAL FIXES v3.41.0: Model Load & Size Limits
+
+✅ **Fixed Access Violation on Load**:
+- ✅ Fixed crash when loading models and calling TransformWithSafety
+- ✅ HNSW load errors now throw exceptions instead of silent failure
+- ✅ Fail-fast validation ensures all indices ready after load
+- ✅ Comprehensive error messages identify exact failure point
+
+✅ **Increased File Size Limits**:
+- ✅ HNSW size limit: 100MB → 2000MB (2GB) - 20x increase
+- ✅ Embedding size limit: 100MB → 2000MB (2GB) - 20x increase
+- ✅ LZ4 int overflow protection: Safe compression up to 2GB
+- ✅ Backward compatible with existing uint32_t format
+
+✅ **Enhanced API**:
+- ✅ New LoadWithCallbacks() method for progress monitoring during load
+- ✅ Callback support for load errors and warnings
+- ✅ Example: UMapModel.LoadWithCallbacks("model.umap", callback)
+
+✅ **Production Reliability**:
+- ✅ 15/15 tests passing including new save/load/TransformWithSafety test
+- ✅ Successfully loads 112MB models with 106k vertices
+- ✅ All HNSW indices validated and reconstructed correctly
+- ✅ Zero compilation warnings, clean codebase
+
+🔧 **Technical Details**:
+- Location: uwot_persistence.cpp, uwot_constants.hpp
+- Fixed: HNSW index reconstruction from embedding data
+- Added: LZ4 overflow checks for both HNSW and embedding compression
+- Improved: Error messages distinguish between corruption vs missing data
+
+🎯 **Impact**:
+- Critical for large models (>100k vertices or high dimensions)
+- Essential for production pipelines using model persistence
+- Prevents access violations during transform operations
+- Enables reliable load monitoring with callback support
+
+🎉 CONTINUES v3.40.0 FEATURES: InitializationMethod Enum & Spectral Default
 
 🚀 UPGRADE RECOMMENDED: Clearer API with InitializationMethod enum + spectral initialization now default!
 
