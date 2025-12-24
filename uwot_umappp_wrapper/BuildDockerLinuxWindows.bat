@@ -20,7 +20,7 @@ echo       (libscran/umappp + spectral initialization)
 echo ----------------------------------------
 
 REM Call the Windows-only build script
-call BuildWindowsOnly.bat
+call Buildwindows.bat
 if !ERRORLEVEL! NEQ 0 (
     echo ERROR: Windows build failed!
     exit /b 1

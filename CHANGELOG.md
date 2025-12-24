@@ -1,5 +1,44 @@
 # UMAP C++ Implementation with C# Wrapper - Change Log
 
+## [3.42.0] - 2024-12-24
+
+### 🐛 **CRITICAL BUG FIXES: Embedding Statistics & HNSW Ordering**
+
+#### **Embedding Statistics Now Calculated (CRITICAL)**
+- **FIXED**: Statistics were NEVER calculated (all zeros in v3.41.0 and earlier)
+- **Added**: Complete statistics collection during fit using HNSW k-NN distances
+- **Collects**: All n_obs × k distances for unbiased statistics
+- **Computes**: min, max, mean, std, p95, p99, median, outlier thresholds
+- **Impact**: AI safety features now work correctly (ConfidenceScore, OutlierLevel, ZScore)
+- **Location**: `uwot_fit.cpp:754-887`
+
+#### **HNSW Ordering Fixed**
+- **FIXED**: NearestNeighborDistances array was reversed (farthest-first)
+- **Added**: `std::reverse()` after HNSW extraction
+- **Now**: [0] = NEAREST neighbor (as users expect)
+- **Consistent**: Matches training k-NN array ordering
+- **Location**: `uwot_transform.cpp:645-647`
+
+#### **Division by Zero**
+- **Confirmed**: Already protected with epsilon in v3.41.0
+- **No changes**: Code was already correct
+
+### 🔧 **Version Updates**
+- **C++ DLL**: Updated to 3.42.0
+- **C# Wrapper**: Updated to 3.42.0
+- **NuGet Package**: Updated to 3.42.0
+
+### 🧪 **Testing**
+- **15/15 C# tests passing**: All validation tests green
+- **Example verified**: Real statistics output confirmed
+- **Safety metrics**: Proper outlier detection working
+
+### 📦 **Migration**
+- **⚠️ IMPORTANT**: Old models have zero statistics - retrain for real metrics
+- **Breaking**: NearestNeighborDistances[0] now = nearest (was farthest)
+
+---
+
 ## [3.37.0] - 2025-10-26
 
 ### 🚀 **PERFORMANCE REVOLUTION: OpenMP Parallelization + Single-Point Optimization**

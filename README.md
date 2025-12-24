@@ -1,6 +1,42 @@
 # Enhanced High-Performance UMAP C++ Implementation with C# Wrapper
 
 
+## 🎉 Latest Release: v3.42.0 (2024-12-24)
+
+### 🐛 Critical Bug Fixes - AI Safety Features Now Working!
+
+**Issue #1: Embedding Statistics - FIXED** ⚠️
+- **CRITICAL**: Statistics were **never calculated** (all zeros in previous versions)
+- **FIXED**: Complete statistics collection during model training
+- **Impact**: AI safety metrics now work correctly:
+  - ✅ ConfidenceScore: Meaningful 0.0-1.0 range
+  - ✅ OutlierLevel: Proper 5-level classification (Normal → No Man's Land)
+  - ✅ PercentileRank: Continuous 0-100 values
+  - ✅ ZScore: Accurate statistical deviations
+
+**Issue #2: HNSW Ordering - FIXED**
+- **Bug**: NearestNeighborDistances[0] was farthest (confusing!)
+- **FIXED**: Now [0] = nearest neighbor (as users expect)
+- **Breaking**: Update code relying on old reversed order
+
+**Before v3.42.0**:
+```
+EmbedStats(min=0.000, p95=0.000, p99=0.000)  // BROKEN - all zeros!
+ConfidenceScore: 1.0 (always)  // Meaningless
+OutlierLevel: 0 (always Normal)  // Broken detection
+```
+
+**After v3.42.0**:
+```
+Stats from 201764 distances: min=0.029, p95=59.582, p99=63.260  // Real data!
+ConfidenceScore: 0.0-1.0 (meaningful range)  // ✅ WORKING!
+OutlierLevel: 0-4 (proper classification)  // ✅ WORKING!
+```
+
+**⚠️ Migration**: Old models have zero statistics - retrain for proper AI safety metrics!
+
+---
+
 ## What is UMAP?
 
 UMAP (Uniform Manifold Approximation and Projection) is a dimensionality reduction technique that can be used for visualization, feature extraction, and preprocessing of high-dimensional data. Unlike many other dimensionality reduction algorithms, UMAP excels at preserving both local and global structure in the data.
@@ -601,6 +637,327 @@ The stream-based HNSW serialization with CRC32 validation is fully implemented a
 ```
 
 **🎯 Result**: Deployment-grade reliability with automatic corruption detection, zero file management overhead, and intelligent HNSW parameter optimization with recall validation.
+
+
+## 🛡️ **Production Safety: Comprehensive OOD Detection Metrics Guide**
+
+### Understanding Out-of-Distribution (OOD) Detection
+
+When you call `TransformWithSafety()`, you get **four independent metrics** that all detect outliers/OOD points, but express the result in different formats. All four metrics are calculated from the **same underlying measurement**: the minimum distance to the nearest neighbor in embedding space.
+
+**Why four metrics?** Different use cases need different formats:
+- **ConfidenceScore** → UI/UX (intuitive 0-100% scale)
+- **Severity** → Business logic (categorical risk levels)
+- **PercentileRank** → Reporting & monitoring (statistical ranking)
+- **Z-Score** → Academic/scientific analysis (standardized statistics)
+
+### 📊 The Four OOD Detection Metrics
+
+All metrics are derived from `min_distance` = distance from the new point to its nearest neighbor in embedding space:
+
+| Metric | Formula | Range | Interpretation |
+|--------|---------|-------|----------------|
+| **ConfidenceScore** | `1.0 - (min_distance - min_emb) / (p95_emb - min_emb)` | 0.0 - 1.0 | **1.0** = Perfect match<br>**0.7-1.0** = High confidence<br>**0.3-0.7** = Moderate<br>**0.0-0.3** = Low/reject |
+| **Z-Score** | `(min_distance - mean_emb) / std_emb` | -∞ to +∞ | **< 2.0** = Normal<br>**2.0-2.5** = Unusual<br>**2.5-4.0** = Mild outlier<br>**> 4.0** = Extreme outlier |
+| **PercentileRank** | Piecewise linear interpolation | 0 - 100 | **< 80** = Well within distribution<br>**80-95** = Approaching edge<br>**95-99** = Rare<br>**> 99** = Extreme |
+| **Severity** | Threshold-based classification | 5 levels | **Normal** (≤p95)<br>**Unusual** (p95-p99)<br>**Mild** (p99 to mean+2.5σ)<br>**Extreme** (mean+2.5σ to mean+4σ)<br>**NoMansLand** (>mean+4σ) |
+
+**Key Statistics** (computed during training):
+- `min_embedding_distance` - Closest distance observed in training
+- `mean_embedding_distance` - Average neighbor distance
+- `std_embedding_distance` - Standard deviation
+- `p95_embedding_distance` - 95th percentile
+- `p99_embedding_distance` - 99th percentile
+
+### 🔢 Neighbor Count: Always k Neighbors Returned
+
+**Important:** `TransformWithSafety()` **always returns exactly k neighbors** per point, where k = `model.GetModelInfo().Neighbors` (typically 15-25 depending on embedding dimension).
+
+```csharp
+var results = model.TransformWithSafety(newData);
+var result = results[0];
+
+// Arrays always have length = k
+Console.WriteLine(result.NearestNeighborIndices.Length);   // e.g., 25
+Console.WriteLine(result.NearestNeighborDistances.Length); // e.g., 25
+Console.WriteLine(result.NeighborCount);                    // e.g., 25
+```
+
+**Edge Case - Small Datasets:** If training data has fewer than k points, remaining slots are filled with sentinel values:
+- Index: `0` (first training point)
+- Distance: `1000.0` (very large sentinel value)
+
+```csharp
+// Detect sentinel values (if dataset was too small)
+for (int i = 0; i < result.NearestNeighborDistances.Length; i++)
+{
+    if (result.NearestNeighborDistances[i] > 100.0f)  // Sentinel threshold
+    {
+        Console.WriteLine($"Only {i} real neighbors (dataset too small)");
+        break;
+    }
+}
+```
+
+### 💻 Complete Usage Example
+
+```csharp
+using UMAPuwotSharp;
+
+// Train model
+var model = new UMapModel();
+var embedding = model.Fit(trainData, embeddingDimension: 2);
+
+// Transform new data with safety metrics
+var results = model.TransformWithSafety(newData);
+
+foreach (var result in results)
+{
+    // Get embedding coordinates
+    var coords = result.ProjectionCoordinates;  // float[2] for 2D
+    Console.WriteLine($"Projected to: [{coords[0]:F3}, {coords[1]:F3}]");
+
+    // METRIC 1: Confidence Score (0.0-1.0)
+    Console.WriteLine($"Confidence: {result.ConfidenceScore:F3} ({result.ConfidenceScore * 100:F1}%)");
+
+    // METRIC 2: Z-Score (standard deviations)
+    Console.WriteLine($"Z-Score: {result.ZScore:F2}σ");
+
+    // METRIC 3: Percentile Rank (0-100)
+    Console.WriteLine($"Percentile: {result.PercentileRank:F1}%");
+
+    // METRIC 4: Severity Level (categorical)
+    Console.WriteLine($"Severity: {result.Severity}");
+
+    // Neighbor information (always k neighbors)
+    Console.WriteLine($"Neighbors analyzed: {result.NearestNeighborIndices.Length}");
+    Console.WriteLine($"Closest training point: index={result.NearestNeighborIndices[0]}, " +
+                     $"distance={result.NearestNeighborDistances[0]:F3}");
+
+    // Helper properties
+    Console.WriteLine($"Is Reliable? {result.IsReliable}");
+    Console.WriteLine($"Quality: {result.QualityAssessment}");
+    Console.WriteLine();
+}
+```
+
+### 🎯 Decision Framework: Combining Metrics for Robust OOD Detection
+
+**Recommended Thresholds:**
+
+| Decision | Confidence | Z-Score | Percentile | Severity | Action |
+|----------|-----------|---------|------------|----------|--------|
+| **✅ Auto-Accept** | ≥ 0.7 | < 2.0 | < 80 | Normal | Use prediction confidently |
+| **⚠️ Human Review** | 0.3-0.7 | 2.0-4.0 | 80-95 | Unusual, Mild | Flag for expert review |
+| **❌ Reject** | < 0.3 | > 4.0 | > 95 | Extreme, NoMansLand | Don't trust - use fallback |
+
+**Example Decision Logic:**
+
+```csharp
+public class PredictionDecision
+{
+    public enum Action { Accept, Review, Reject }
+
+    public static Action MakeDecision(TransformResult result)
+    {
+        // Strict: ALL metrics must agree for acceptance
+        bool highConfidence = result.ConfidenceScore >= 0.7
+                           && result.ZScore < 2.0
+                           && result.PercentileRank < 80
+                           && result.Severity == OutlierLevel.Normal;
+
+        if (highConfidence)
+            return Action.Accept;
+
+        // Reject if ANY metric shows extreme outlier
+        bool extremeOutlier = result.ConfidenceScore < 0.3
+                           || Math.Abs(result.ZScore) > 4.0
+                           || result.PercentileRank > 95
+                           || result.Severity >= OutlierLevel.Extreme;
+
+        if (extremeOutlier)
+            return Action.Reject;
+
+        // Middle ground: flag for review
+        return Action.Review;
+    }
+}
+
+// Usage
+foreach (var result in results)
+{
+    switch (PredictionDecision.MakeDecision(result))
+    {
+        case PredictionDecision.Action.Accept:
+            Console.WriteLine("✅ HIGH CONFIDENCE - Auto-accept prediction");
+            ProcessPrediction(result.ProjectionCoordinates);
+            break;
+
+        case PredictionDecision.Action.Review:
+            Console.WriteLine("⚠️ MODERATE - Flag for human review");
+            FlagForReview(result);
+            break;
+
+        case PredictionDecision.Action.Reject:
+            Console.WriteLine("❌ LOW CONFIDENCE - Reject or use fallback");
+            UseFallbackModel(result);
+            break;
+    }
+}
+```
+
+### 📈 Real-World Examples
+
+**Example 1: High Confidence (In-Distribution)**
+```
+Training statistics learned:
+  min_embedding_distance = 0.10
+  mean_embedding_distance = 0.60
+  std_embedding_distance = 0.20
+  p95_embedding_distance = 1.00
+
+New point: min_distance = 0.40
+
+Results:
+  ✅ Confidence: 0.667 (67%) - Good
+  ✅ Z-Score: -1.00σ (better than average!)
+  ✅ Percentile: 44.3% (middle of distribution)
+  ✅ Severity: Normal
+
+Interpretation: "Model has seen very similar patterns. Prediction is reliable."
+Action: Auto-accept
+```
+
+**Example 2: Moderate Uncertainty (Edge of Distribution)**
+```
+Training statistics learned:
+  min_embedding_distance = 0.10
+  mean_embedding_distance = 0.60
+  std_embedding_distance = 0.20
+  p95_embedding_distance = 1.00
+
+New point: min_distance = 0.85
+
+Results:
+  ⚠️ Confidence: 0.167 (17%) - Low
+  ⚠️ Z-Score: 1.25σ (slightly above average)
+  ⚠️ Percentile: 79.1% (approaching edge)
+  ✅ Severity: Normal (still below p95)
+
+Interpretation: "Point is unusual but statistically acceptable. Model uncertain."
+Action: Flag for human review
+```
+
+**Example 3: Extreme Outlier (Out-of-Distribution)**
+```
+Training statistics learned:
+  min_embedding_distance = 0.10
+  mean_embedding_distance = 0.60
+  std_embedding_distance = 0.20
+  p95_embedding_distance = 1.00
+
+New point: min_distance = 1.50
+
+Results:
+  ❌ Confidence: 0.0 (0%) - No confidence
+  ❌ Z-Score: 4.5σ (extreme!)
+  ❌ Percentile: 99.0% (capped - beyond distribution)
+  ❌ Severity: NoMansLand
+
+Interpretation: "Model has NEVER seen anything like this. Pure extrapolation."
+Action: Reject prediction - use fallback or request human input
+```
+
+### 🏭 Best Practices for Production Deployment
+
+**1. Industry-Specific Thresholds:**
+
+| Industry | Accept Threshold | Review Threshold | Why |
+|----------|------------------|------------------|-----|
+| **Medical AI** | Confidence ≥ 0.9, Severity = Normal | 0.7-0.9 | Lives at stake - be conservative |
+| **Financial Trading** | Confidence ≥ 0.8, Z-Score < 1.5 | 0.5-0.8 | Money at risk - cautious but actionable |
+| **E-Commerce Recommendations** | Confidence ≥ 0.5, Percentile < 90 | 0.3-0.5 | Low stakes - more tolerance |
+| **Fraud Detection** | Percentile > 95, Severity ≥ Mild | 80-95 | Catch outliers - opposite logic |
+
+**2. Monitoring & Alerting:**
+
+```csharp
+// Track OOD rate over time
+var oodCount = results.Count(r => r.Severity >= OutlierLevel.Mild);
+var oodRate = (double)oodCount / results.Length;
+
+if (oodRate > 0.15)  // More than 15% outliers
+{
+    Console.WriteLine($"⚠️ WARNING: High OOD rate ({oodRate:P0}) - model may need retraining");
+    AlertDataScientists("OOD rate exceeds threshold", oodRate);
+}
+```
+
+**3. Batch Processing with Filtering:**
+
+```csharp
+// Process batch and separate by confidence
+var reliableResults = results.Where(r => r.IsReliable).ToList();
+var uncertainResults = results.Where(r => !r.IsReliable).ToList();
+
+Console.WriteLine($"✅ Reliable predictions: {reliableResults.Count} ({reliableResults.Count * 100.0 / results.Length:F1}%)");
+Console.WriteLine($"⚠️ Uncertain predictions: {uncertainResults.Count} ({uncertainResults.Count * 100.0 / results.Length:F1}%)");
+
+// Process reliable predictions automatically
+ProcessAutomatically(reliableResults);
+
+// Queue uncertain predictions for human review
+QueueForReview(uncertainResults);
+```
+
+**4. Dataset Size Validation:**
+
+```csharp
+// CRITICAL: Ensure training data is larger than k
+public float[,] Fit(float[,] data, int? nNeighbors = null, ...)
+{
+    int nSamples = data.GetLength(0);
+    int actualNeighbors = nNeighbors ?? CalculateOptimalNeighbors(embeddingDimension);
+
+    if (actualNeighbors >= nSamples)
+    {
+        throw new ArgumentException(
+            $"Number of neighbors ({actualNeighbors}) must be less than dataset size ({nSamples}). " +
+            $"Either reduce nNeighbors or add more training data.");
+    }
+
+    return CallFit(data, actualNeighbors, ...);
+}
+```
+
+**5. Logging for Debugging:**
+
+```csharp
+// Log detailed metrics for debugging production issues
+var logger = LogManager.GetCurrentClassLogger();
+
+foreach (var result in results)
+{
+    logger.Debug($"OOD Metrics - " +
+                $"Confidence: {result.ConfidenceScore:F3}, " +
+                $"Z-Score: {result.ZScore:F2}, " +
+                $"Percentile: {result.PercentileRank:F1}%, " +
+                $"Severity: {result.Severity}, " +
+                $"Neighbors: {result.NearestNeighborIndices.Length}, " +
+                $"MinDist: {result.NearestNeighborDistances.Min():F3}");
+}
+```
+
+### 🎓 Key Takeaways
+
+1. **All four metrics detect OOD** - they just express it in different formats for different audiences
+2. **Always get k neighbors** - arrays always have length = `model.Neighbors` (with sentinels if dataset too small)
+3. **Use multiple metrics together** - more robust than relying on one alone
+4. **Calibrate thresholds** - adjust based on your industry's risk tolerance
+5. **Monitor OOD rates** - high OOD rate indicates need for model retraining
+6. **Validate dataset size** - ensure training data has more samples than k
+
+**For more details on the dual HNSW architecture powering these metrics, see the section above.**
 
 
 ## Enhanced Features

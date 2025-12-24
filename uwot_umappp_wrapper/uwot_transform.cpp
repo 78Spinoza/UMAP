@@ -629,6 +629,8 @@ namespace transform_utils {
                     auto embedding_search_result = model->embedding_space_index->searchKnn(new_embedding_point, model->n_neighbors);
 
                     // Extract embedding space neighbors and distances for AI inference
+                    // NOTE: HNSW searchKnn() returns results in "further first" order (max-heap)
+                    // We need to reverse to get nearest-first ordering for user expectations
                     while (!embedding_search_result.empty()) {
                         auto pair = embedding_search_result.top();
                         embedding_search_result.pop();
@@ -639,6 +641,10 @@ namespace transform_utils {
                         embedding_neighbors.push_back(neighbor_idx);
                         embedding_distances.push_back(distance);
                     }
+
+                    // Reverse arrays so that [0] = NEAREST, [last] = FARTHEST (user-expected ordering)
+                    std::reverse(embedding_neighbors.begin(), embedding_neighbors.end());
+                    std::reverse(embedding_distances.begin(), embedding_distances.end());
                 }
 
                 // Store EMBEDDING SPACE neighbor information (this is what AI needs)

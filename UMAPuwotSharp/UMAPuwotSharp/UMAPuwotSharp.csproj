@@ -12,7 +12,7 @@
     <!-- Enhanced NuGet metadata -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>UMAPuwotSharp</PackageId>
-    <Version>3.41.0</Version>
+    <Version>3.42.0</Version>
     <Authors>Amin Gholiha</Authors>
     <Company>ID Soft AB</Company>
     <Product>UMAPuwotSharp Enhanced with HNSW</Product>
@@ -531,16 +531,16 @@ This is the FIRST OFFICIAL STABLE RELEASE of UMAPuwotSharp. All previous version
 
   <!-- Include enhanced native libraries in the package -->
   <ItemGroup>
-    <Content Include="uwot.dll">
+    <None Include="uwot.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Pack>true</Pack>
-      <PackagePath>runtimes\win-x64\native\uwot.dll</PackagePath>
-    </Content>
-    <Content Include="libuwot.so">
+      <PackagePath>uwot.dll</PackagePath>
+    </None>
+    <None Include="libuwot.so">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Pack>true</Pack>
-      <PackagePath>runtimes\linux-x64\native\libuwot.so</PackagePath>
-    </Content>
+      <PackagePath>libuwot.so</PackagePath>
+    </None>
   </ItemGroup>
 
   <!-- Include README in package -->

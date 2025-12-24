@@ -748,7 +748,142 @@ void apply_smooth_knn_to_point(const int* indices, const float* distances, int k
 
             // FAST TRANSFORM OPTIMIZATION: HNSW path already computed rho/sigma in the k-NN loop
             if (wrapped_callback) {
-                wrapped_callback("Fast Transform Data Ready", 98, 100, 98.0f, "Fast transform optimization completed during HNSW k-NN");
+                wrapped_callback("Fast Transform Data Ready", 95, 100, 95.0f, "Fast transform optimization completed during HNSW k-NN");
+            }
+
+            // ===== CRITICAL: Build Embedding Space HNSW Index for AI Metrics =====
+            if (wrapped_callback) {
+                wrapped_callback("Building embedding index", 96, 100, 96.0f, "Creating embedding space HNSW for AI metrics");
+            }
+
+            try {
+                // Create L2 space for embeddings (always L2, regardless of original metric)
+                auto embedding_space_factory = std::make_unique<hnsw_utils::SpaceFactory>();
+                hnswlib::SpaceInterface<float>* embedding_space = new hnswlib::L2Space(embedding_dim);
+
+                // Create HNSW index for embedding space
+                auto embedding_hnsw = std::make_unique<hnswlib::HierarchicalNSW<float>>(
+                    embedding_space, n_obs, actual_M, actual_ef_construction
+                );
+
+                // Add all embedding points to the index
+                for (int i = 0; i < n_obs; i++) {
+                    embedding_hnsw->addPoint(embedding + i * embedding_dim, static_cast<hnswlib::labeltype>(i));
+
+                    // Report progress every 5% of points for large datasets
+                    if (wrapped_callback && n_obs > 10000 && (i % (n_obs / 20) == 0 || i == n_obs - 1)) {
+                        float sub_progress = 96.0f + (1.0f * i / n_obs);
+                        wrapped_callback("Building embedding index", i, n_obs, sub_progress, "Indexing embeddings for AI");
+                    }
+                }
+
+                // Set ef for search
+                embedding_hnsw->setEf(actual_ef_search);
+
+                // Save to model
+                model->embedding_space_index = std::move(embedding_hnsw);
+                model->embedding_space_factory = std::move(embedding_space_factory);
+
+            } catch (const std::exception& e) {
+                if (wrapped_callback) {
+                    char err_msg[256];
+                    snprintf(err_msg, sizeof(err_msg), "Warning: Failed to create embedding index - %s", e.what());
+                    wrapped_callback("Warning", 96, 100, 96.0f, err_msg);
+                }
+                // Continue anyway - fit succeeded even if embedding index creation failed
+            }
+
+            // ===== CRITICAL: Calculate Embedding Space Statistics for Transform Safety =====
+            if (wrapped_callback) {
+                wrapped_callback("Calculating embedding statistics", 97, 100, 97.0f, "Computing safety metrics from embedding space");
+            }
+
+            try {
+                if (model->embedding_space_index) {
+                    // Collect k-NN distances from ALL points in embedding space
+                    std::vector<float> all_embedding_knn_distances;
+                    all_embedding_knn_distances.reserve(static_cast<size_t>(n_obs) * n_neighbors);
+
+                    for (int i = 0; i < n_obs; i++) {
+                        const float* point = embedding + static_cast<size_t>(i) * embedding_dim;
+
+                        // Query k+1 neighbors (includes self)
+                        auto knn_result = model->embedding_space_index->searchKnn(point, n_neighbors + 1);
+
+                        // Extract distances, skipping self-match
+                        while (!knn_result.empty()) {
+                            auto pair = knn_result.top();
+                            knn_result.pop();
+
+                            int neighbor_id = static_cast<int>(pair.second);
+                            if (neighbor_id != i) {  // Skip self
+                                float dist = std::sqrt(std::max(0.0f, pair.first));
+                                all_embedding_knn_distances.push_back(dist);
+                            }
+                        }
+
+                        // Report progress every 5% for large datasets
+                        if (wrapped_callback && n_obs > 10000 && (i % (n_obs / 20) == 0 || i == n_obs - 1)) {
+                            float sub_progress = 97.0f + (0.5f * i / n_obs);
+                            wrapped_callback("Calculating statistics", i, n_obs, sub_progress, "Analyzing embedding distances");
+                        }
+                    }
+
+                    // Calculate statistics from collected distances
+                    if (!all_embedding_knn_distances.empty()) {
+                        std::sort(all_embedding_knn_distances.begin(), all_embedding_knn_distances.end());
+                        size_t n_distances = all_embedding_knn_distances.size();
+
+                        // Calculate percentiles
+                        model->min_embedding_distance = all_embedding_knn_distances[0];
+                        model->max_embedding_distance = all_embedding_knn_distances[n_distances - 1];
+                        model->p95_embedding_distance = all_embedding_knn_distances[static_cast<size_t>(0.95 * n_distances)];
+                        model->p99_embedding_distance = all_embedding_knn_distances[static_cast<size_t>(0.99 * n_distances)];
+                        model->median_embedding_distance = all_embedding_knn_distances[n_distances / 2];
+
+                        // Calculate mean
+                        double sum = 0.0;
+                        for (float d : all_embedding_knn_distances) {
+                            sum += d;
+                        }
+                        model->mean_embedding_distance = static_cast<float>(sum / n_distances);
+
+                        // Calculate standard deviation
+                        double variance = 0.0;
+                        for (float d : all_embedding_knn_distances) {
+                            double diff = d - model->mean_embedding_distance;
+                            variance += diff * diff;
+                        }
+                        model->std_embedding_distance = static_cast<float>(std::sqrt(variance / n_distances));
+
+                        // Calculate outlier thresholds
+                        model->mild_embedding_outlier_threshold = model->mean_embedding_distance + 2.5f * model->std_embedding_distance;
+                        model->extreme_embedding_outlier_threshold = model->mean_embedding_distance + 4.0f * model->std_embedding_distance;
+                        model->exact_embedding_match_threshold = model->min_embedding_distance * 0.1f;
+
+                        if (wrapped_callback) {
+                            char stats_msg[256];
+                            snprintf(stats_msg, sizeof(stats_msg),
+                                     "Stats from %zu distances: min=%.3f, p95=%.3f, p99=%.3f, mean=%.3f, std=%.3f",
+                                     n_distances, model->min_embedding_distance, model->p95_embedding_distance,
+                                     model->p99_embedding_distance, model->mean_embedding_distance,
+                                     model->std_embedding_distance);
+                            wrapped_callback("Statistics ready", 98, 100, 98.0f, stats_msg);
+                        }
+                    }
+                } else {
+                    if (wrapped_callback) {
+                        wrapped_callback("Warning", 97, 100, 97.0f,
+                                       "Embedding space HNSW index not available, statistics will be zero");
+                    }
+                }
+            } catch (const std::exception& e) {
+                if (wrapped_callback) {
+                    char err_msg[256];
+                    snprintf(err_msg, sizeof(err_msg), "Warning: Failed to calculate embedding statistics - %s", e.what());
+                    wrapped_callback("Warning", 97, 100, 97.0f, err_msg);
+                }
+                // Don't fail fit if stats calculation fails - just leave as 0.0
             }
 
             // Update model with results
