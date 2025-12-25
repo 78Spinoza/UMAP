@@ -572,7 +572,7 @@ namespace persistence_utils {
             load_hnsw(has_embedding_index, model->embedding_space_index, model->embedding_space_factory,
                 UWOT_METRIC_EUCLIDEAN, model->embedding_dim, "Embedding space");
 
-            // Rebuild embedding HNSW if needed and possible
+            // Rebuild embedding HNSW if needed and possible (for old models pre-v3.42.0)
             if (!model->embedding_space_index && !model->embedding.empty() && model->n_vertices > 0) {
                 try {
                     if (!model->embedding_space_factory) {
@@ -582,21 +582,78 @@ namespace persistence_utils {
                         throw std::runtime_error("Failed to create embedding space");
                     }
 
+                    // Use defaults if HNSW params are not set (for backward compatibility with old models)
+                    int actual_M = (model->hnsw_M > 0) ? model->hnsw_M : 15;
+                    int actual_ef_construction = (model->hnsw_ef_construction > 0) ? model->hnsw_ef_construction : 200;
+                    int actual_ef_search = (model->hnsw_ef_search > 0) ? model->hnsw_ef_search : 50;
+
                     model->embedding_space_index = std::make_unique<hnswlib::HierarchicalNSW<float>>(
                         model->embedding_space_factory->get_space(), model->n_vertices,
-                        model->hnsw_M, model->hnsw_ef_construction);
-                    model->embedding_space_index->setEf(model->hnsw_ef_search);
+                        actual_M, actual_ef_construction);
+                    model->embedding_space_index->setEf(actual_ef_search);
 
                     for (int i = 0; i < model->n_vertices; ++i) {
                         const float* ptr = &model->embedding[i * model->embedding_dim];
                         model->embedding_space_index->addPoint(ptr, i);
                     }
+
+                    // Calculate embedding statistics for TransformWithSafety (v3.42.0+)
+                    std::vector<float> all_embedding_knn_distances;
+                    int n_neighbors = (model->n_neighbors > 0) ? model->n_neighbors : 15;
+                    all_embedding_knn_distances.reserve(static_cast<size_t>(model->n_vertices) * n_neighbors);
+
+                    for (int i = 0; i < model->n_vertices; i++) {
+                        const float* point = &model->embedding[i * model->embedding_dim];
+                        auto knn_result = model->embedding_space_index->searchKnn(point, n_neighbors + 1);
+
+                        while (!knn_result.empty()) {
+                            auto pair = knn_result.top();
+                            knn_result.pop();
+
+                            int neighbor_id = static_cast<int>(pair.second);
+                            if (neighbor_id != i) {
+                                float dist = std::sqrt(std::max(0.0f, pair.first));
+                                all_embedding_knn_distances.push_back(dist);
+                            }
+                        }
+                    }
+
+                    // Calculate statistics
+                    if (!all_embedding_knn_distances.empty()) {
+                        std::sort(all_embedding_knn_distances.begin(), all_embedding_knn_distances.end());
+                        size_t n_distances = all_embedding_knn_distances.size();
+
+                        model->min_embedding_distance = all_embedding_knn_distances[0];
+                        model->max_embedding_distance = all_embedding_knn_distances[n_distances - 1];
+                        model->p95_embedding_distance = all_embedding_knn_distances[static_cast<size_t>(0.95 * n_distances)];
+                        model->p99_embedding_distance = all_embedding_knn_distances[static_cast<size_t>(0.99 * n_distances)];
+                        model->median_embedding_distance = all_embedding_knn_distances[n_distances / 2];
+
+                        double sum = 0.0;
+                        for (float d : all_embedding_knn_distances) {
+                            sum += d;
+                        }
+                        model->mean_embedding_distance = static_cast<float>(sum / n_distances);
+
+                        double variance = 0.0;
+                        for (float d : all_embedding_knn_distances) {
+                            double diff = d - model->mean_embedding_distance;
+                            variance += diff * diff;
+                        }
+                        model->std_embedding_distance = static_cast<float>(std::sqrt(variance / n_distances));
+
+                        model->mild_embedding_outlier_threshold = model->mean_embedding_distance + 2.5f * model->std_embedding_distance;
+                        model->extreme_embedding_outlier_threshold = model->mean_embedding_distance + 4.0f * model->std_embedding_distance;
+                        model->exact_embedding_match_threshold = model->min_embedding_distance * 0.1f;
+                    }
                 }
                 catch (const std::exception& e) {
+                    // Don't throw - just log warning and continue
+                    // This allows old models to work for basic Transform, even if TransformWithSafety is limited
                     model->embedding_space_index = nullptr;
-                    std::string error_msg = std::string("CRITICAL: Embedding HNSW reconstruction failed: ") + e.what();
-                    send_error_to_callback(error_msg.c_str());
-                    throw std::runtime_error(error_msg);
+                    std::string warning_msg = std::string("Warning: Could not rebuild embedding HNSW index for old model: ") + e.what();
+                    send_warning_to_callback(warning_msg.c_str());
+                    // Continue anyway - don't throw
                 }
             }
 
@@ -616,21 +673,12 @@ namespace persistence_utils {
                 throw std::runtime_error("CRITICAL: Model load failed - original_space_index is uninitialized (no elements). Transform operations will not work.");
             }
 
-            // 2. Check embedding_space_index (required for TransformWithSafety)
-            if (!model->embedding_space_index) {
-                if (!model->embedding.empty()) {
-                    throw std::runtime_error("CRITICAL: Model load failed - embedding_space_index is NULL but embedding data exists. "
-                        "HNSW index reconstruction failed. Check if embedding data is corrupted or model was saved with incompatible settings. "
-                        "TransformWithSafety will not work.");
-                } else {
-                    throw std::runtime_error("CRITICAL: Model load failed - embedding_space_index is NULL and no embedding data to rebuild from. "
-                        "Model file may be corrupted or incomplete. TransformWithSafety will not work.");
-                }
-            }
-            if (model->embedding_space_index->cur_element_count == 0 ||
-                model->embedding_space_index->max_elements_ == 0) {
-                throw std::runtime_error("CRITICAL: Model load failed - embedding_space_index is uninitialized (no elements loaded). "
-                    "TransformWithSafety will not work. Check model file integrity.");
+            // 2. Check embedding_space_index (optional - for TransformWithSafety)
+            // NOT throwing error if missing - old models don't have it
+            // TransformWithSafety will gracefully degrade if missing
+            if (!model->embedding_space_index && !model->embedding.empty()) {
+                // This is an old model (pre-v3.42.0) - TransformWithSafety will be limited
+                send_warning_to_callback("Warning: Loaded old model without embedding_space_index. TransformWithSafety will have limited functionality.");
             }
 
             // 3. Check embedding data (required for transform)

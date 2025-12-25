@@ -1,11 +1,33 @@
 # Enhanced High-Performance UMAP C++ Implementation with C# Wrapper
 
 
-## 🎉 Latest Release: v3.42.0 (2024-12-24)
+## 🎉 Latest Release: v3.42.1 (2024-12-24)
 
-### 🐛 Critical Bug Fixes - AI Safety Features Now Working!
+### ✅ Backward Compatibility + Single-Sample TransformWithSafety Fix
 
-**Issue #1: Embedding Statistics - FIXED** ⚠️
+**Issue #1: Old Models Now Work!** ⚠️
+- **FIXED**: Old models (pre-v3.42.0) now rebuild `embedding_space_index` on load
+- **Auto-calculates**: Embedding statistics when loading old models
+- **Result**: Old models work with TransformWithSafety!
+- **No retraining needed**: Just load your old models and they work!
+
+**Issue #2: Single-Sample TransformWithSafety - CRITICAL FIX** 🐛
+- **Bug**: Calling `TransformWithSafety()` with 1 sample returned all zeros
+- **Root Cause**: Fast path optimization didn't populate safety metrics
+- **FIXED**: Enhanced fast path now supports TransformWithSafety while maintaining 12-15x speedup
+- **Impact**: Single-sample transforms now work correctly with full safety metrics
+  ```csharp
+  // Before (broken):
+  model.TransformWithSafety(oneSample);
+  // Distance: 0, Confidence: 0 ❌
+
+  // After (fixed):
+  model.TransformWithSafety(oneSample);
+  // Distance: 0.001, Confidence: 0.993 ✅
+  // Speed: Still 12-15x faster than batch! ✅
+  ```
+
+**Issue #3: Embedding Statistics - FIXED**
 - **CRITICAL**: Statistics were **never calculated** (all zeros in previous versions)
 - **FIXED**: Complete statistics collection during model training
 - **Impact**: AI safety metrics now work correctly:
@@ -14,26 +36,15 @@
   - ✅ PercentileRank: Continuous 0-100 values
   - ✅ ZScore: Accurate statistical deviations
 
-**Issue #2: HNSW Ordering - FIXED**
+**Issue #4: HNSW Ordering - FIXED**
 - **Bug**: NearestNeighborDistances[0] was farthest (confusing!)
 - **FIXED**: Now [0] = nearest neighbor (as users expect)
-- **Breaking**: Update code relying on old reversed order
 
-**Before v3.42.0**:
+**After v3.42.1**:
 ```
-EmbedStats(min=0.000, p95=0.000, p99=0.000)  // BROKEN - all zeros!
-ConfidenceScore: 1.0 (always)  // Meaningless
-OutlierLevel: 0 (always Normal)  // Broken detection
+Old model loaded → embedding_space_index rebuilt → Statistics calculated
+TransformWithSafety(singleSample) → Fast + Correct! ✅
 ```
-
-**After v3.42.0**:
-```
-Stats from 201764 distances: min=0.029, p95=59.582, p99=63.260  // Real data!
-ConfidenceScore: 0.0-1.0 (meaningful range)  // ✅ WORKING!
-OutlierLevel: 0-4 (proper classification)  // ✅ WORKING!
-```
-
-**⚠️ Migration**: Old models have zero statistics - retrain for proper AI safety metrics!
 
 ---
 

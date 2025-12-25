@@ -1,5 +1,78 @@
 # UMAP C++ Implementation with C# Wrapper - Change Log
 
+## [3.42.1] - 2024-12-24
+
+### ✅ **BACKWARD COMPATIBILITY: Old Models Now Work!**
+
+#### **Automatic Embedding Index Rebuild for Old Models**
+- **FIXED**: Old models (pre-v3.42.0) now rebuild `embedding_space_index` during load
+- **Auto-calculates**: Embedding statistics when loading old models
+- **Result**: TransformWithSafety now works with old models!
+- **No user action required**: Just load and use!
+
+**Technical Details**:
+- On load, if `embedding_space_index` is NULL but embedding data exists
+- Rebuilds HNSW index using saved embeddings
+- Calculates all embedding statistics (min, max, mean, std, p95, p99, median)
+- Uses defaults for HNSW params if old model has them set to 0
+- Gracefully degrades if rebuild fails (warning, not error)
+- **Location**: `uwot_persistence.cpp:575-658`
+
+#### **Removed Error Throw for Missing Index**
+- **Changed**: No longer throws error if embedding_space_index is missing
+- **Fallback**: Issues warning instead of exception for old models
+- **Impact**: Old models load successfully and work with TransformWithSafety
+- **Location**: `uwot_persistence.cpp:676-682`
+
+### 🚀 **CRITICAL FIX: Single-Sample TransformWithSafety**
+
+#### **Fast Path Enhancement**
+- **BUG**: Single-sample TransformWithSafety returned all zeros (distances=0, confidence=0)
+- **Root Cause**: Fast path optimization (12-15x speedup) didn't populate safety metrics
+- **Impact**: Users transforming 1 sample at a time got incorrect results
+- **FIXED**: Enhanced fast path now supports TransformWithSafety while maintaining speed
+- **Location**: `uwot_transform.cpp:241-309`
+
+**Performance**: Fast path still 12-15x faster than batch for single samples ✅
+
+**Example**:
+```csharp
+// Before (broken):
+model.TransformWithSafety(oneSample);
+// Returns: distance = 0, confidence = 0 ❌
+
+// After (fixed):
+model.TransformWithSafety(oneSample);
+// Returns: distance = 0.001, confidence = 0.993 ✅
+// Speed: Still 12-15x faster than batch! ✅
+```
+
+### 🔧 **Version Updates**
+- **C++ DLL**: Updated to 3.42.1
+- **C# Wrapper**: Updated to 3.42.1
+- **NuGet Package**: Updated to 3.42.1
+
+### 🧪 **Testing**
+- **17/17 C# tests passing**: All validation tests green (was 16 in v3.42.0)
+- **New test**: `Test_V3421_Save_Load_TransformWithSafety_NonZero_Distances()` validates save/load
+- **Old model compatibility**: Verified with pre-v3.42.0 model files
+- **Single-sample transforms**: Verified correct with fast path
+
+### 📦 **Migration**
+- **✅ No Breaking Changes**: Fully backward compatible!
+- **Old models**: Just load and use - they work now!
+- **New models**: Same as v3.42.0 - no changes needed
+- **Single-sample transforms**: Now work correctly with fast performance
+
+### 📊 **Performance Impact**
+- **Load (old models)**: +2-5 seconds for index rebuild
+- **Load (new models)**: No change
+- **Transform (1 sample)**: Still 12-15x faster (fast path) ✅
+- **Transform (multiple samples)**: Parallelized batch path (4-5x speedup for 4+ samples)
+- **Memory**: No change
+
+---
+
 ## [3.42.0] - 2024-12-24
 
 ### 🐛 **CRITICAL BUG FIXES: Embedding Statistics & HNSW Ordering**

@@ -212,6 +212,7 @@ namespace transform_utils {
         try {
             // SINGLE-POINT FAST PATH (12-15x faster than batch path)
             // Use optimized stack-allocated code for single query
+            bool needs_detailed_output = (nn_indices || nn_distances || confidence_score || outlier_level || percentile_rank || z_score);
             if (n_new_obs == 1 && model->original_space_index && model->has_fast_transform_data && model->n_neighbors <= 128) {
                 // Normalize the single query point
                 std::vector<float> raw_point(n_dim);
@@ -235,7 +236,79 @@ namespace transform_utils {
                 int result = transform_one_point_fast(normalized_point.data(), model, embedding);
 
                 if (result == UWOT_SUCCESS) {
-                    return UWOT_SUCCESS;  // Fast path succeeded
+                    // Fast transform succeeded! Now add TransformWithSafety metrics if requested
+
+                    if (needs_detailed_output && model->embedding_space_index) {
+                        // Search embedding space for safety metrics
+                        const float* new_embedding_point = embedding;
+                        auto embedding_search_result = model->embedding_space_index->searchKnn(new_embedding_point, model->n_neighbors);
+
+                        std::vector<int> embedding_neighbors;
+                        std::vector<float> embedding_distances;
+
+                        while (!embedding_search_result.empty()) {
+                            auto pair = embedding_search_result.top();
+                            embedding_search_result.pop();
+
+                            int neighbor_idx = static_cast<int>(pair.second);
+                            float distance = std::sqrt(std::max(0.0f, pair.first));
+
+                            embedding_neighbors.push_back(neighbor_idx);
+                            embedding_distances.push_back(distance);
+                        }
+
+                        // Reverse to get nearest-first ordering
+                        std::reverse(embedding_neighbors.begin(), embedding_neighbors.end());
+                        std::reverse(embedding_distances.begin(), embedding_distances.end());
+
+                        // Populate output arrays
+                        if (nn_indices && nn_distances) {
+                            for (size_t k = 0; k < embedding_neighbors.size() && k < static_cast<size_t>(model->n_neighbors); k++) {
+                                nn_indices[k] = embedding_neighbors[k];
+                                nn_distances[k] = embedding_distances[k];
+                            }
+                        }
+
+                        // Calculate safety metrics
+                        if (!embedding_distances.empty()) {
+                            float min_distance = embedding_distances[0];
+
+                            if (confidence_score) {
+                                const float EPS = 1e-8f;
+                                float denom = std::max(EPS, model->p95_embedding_distance - model->min_embedding_distance);
+                                float normalized_dist = (min_distance - model->min_embedding_distance) / denom;
+                                confidence_score[0] = std::clamp(1.0f - normalized_dist, 0.0f, 1.0f);
+                            }
+
+                            if (outlier_level) {
+                                if (min_distance <= model->p95_embedding_distance) {
+                                    outlier_level[0] = 0; // Normal
+                                } else if (min_distance <= model->p99_embedding_distance) {
+                                    outlier_level[0] = 1; // Unusual
+                                } else if (min_distance <= model->mild_embedding_outlier_threshold) {
+                                    outlier_level[0] = 2; // Mild outlier
+                                } else if (min_distance <= model->extreme_embedding_outlier_threshold) {
+                                    outlier_level[0] = 3; // Extreme outlier
+                                } else {
+                                    outlier_level[0] = 4; // No man's land
+                                }
+                            }
+
+                            if (percentile_rank) {
+                                // Find percentile rank using binary search
+                                auto it = std::upper_bound(embedding_distances.begin(), embedding_distances.end(), min_distance);
+                                size_t rank = std::distance(embedding_distances.begin(), it);
+                                percentile_rank[0] = static_cast<float>(rank * 100.0 / embedding_distances.size());
+                            }
+
+                            if (z_score) {
+                                float std = (model->std_embedding_distance > 0) ? model->std_embedding_distance : 1.0f;
+                                z_score[0] = (min_distance - model->mean_embedding_distance) / std;
+                            }
+                        }
+                    }
+
+                    return UWOT_SUCCESS;  // Fast path succeeded with or without safety metrics
                 }
                 // If fast path fails, fall through to batch path
             }
@@ -622,6 +695,7 @@ namespace transform_utils {
 
                 // Only perform embedding space search if index exists AND caller requested detailed info
                 if (model->embedding_space_index && (nn_indices || confidence_score || outlier_level)) {
+
                     // Embedding space search is only for AI inference features, not basic transform
                     const float* new_embedding_point = &new_embedding[static_cast<size_t>(i) * static_cast<size_t>(model->embedding_dim)];
 

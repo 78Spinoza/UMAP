@@ -525,6 +525,171 @@ namespace UMAPuwotSharp.Tests
                 model.Fit(_testData, nNeighbors: 0));
         }
 
+        /// <summary>
+        /// Test v3.42.0: Verify TransformWithSafety returns non-zero embedding distances
+        /// and meaningful safety metrics (not all zeros or 1.0)
+        /// </summary>
+        [TestMethod]
+        public void Test_V342_TransformWithSafety_NonZero_Distances()
+        {
+            using var model = new UMapModel();
+
+            // Train model with v3.42.0 (should calculate embedding statistics)
+            var embedding = model.Fit(_testData,
+                embeddingDimension: 2,
+                nNeighbors: 15,
+                nEpochs: 30);
+
+            Assert.IsTrue(model.IsFitted, "Model should be fitted");
+
+            // Test TransformWithSafety - should return non-zero distances
+            float[,] newData = GenerateTestData(50, TestFeatures, seed: 999);
+            var results = model.TransformWithSafety(newData);
+
+            Assert.IsNotNull(results, "TransformWithSafety results should not be null");
+            Assert.AreEqual(50, results.Length, "Should have 50 results");
+
+            // Verify embedding distances are NOT all zeros (v3.42.0 fix)
+            var hasNonZero = false;
+            double minDist = double.MaxValue;
+            double maxDist = 0;
+
+            for (int i = 0; i < Math.Min(results.Length, 10); i++)
+            {
+                var result = results[i];
+
+                // Check embedding neighbor distances
+                if (result.NearestNeighborDistances != null &&
+                    result.NearestNeighborDistances.Length > 0)
+                {
+                    double firstDist = result.NearestNeighborDistances[0];
+
+                    if (firstDist > 0)
+                    {
+                        hasNonZero = true;
+                    }
+
+                    minDist = Math.Min(minDist, firstDist);
+                    maxDist = Math.Max(maxDist, firstDist);
+
+                    if (i < 5) // Print first 5 for debugging
+                    {
+                        Console.WriteLine($"Result {i}: First NN Dist = {firstDist:F6}, " +
+                                        $"Confidence = {result.ConfidenceScore:F3}, " +
+                                        $"Severity = {result.Severity}");
+                    }
+                }
+            }
+
+            Console.WriteLine($"\n=== Embedding Distance Summary (v3.42.0) ===");
+            Console.WriteLine($"Has non-zero distances: {hasNonZero}");
+            Console.WriteLine($"Min distance: {minDist:F6}");
+            Console.WriteLine($"Max distance: {maxDist:F6}");
+
+            // CRITICAL ASSERT: We must have non-zero distances (v3.42.0 fix)
+            Assert.IsTrue(hasNonZero,
+                "TransformWithSafety should return non-zero embedding distances (v3.42.0 fix)");
+
+            // Verify confidence scores vary (not all 1.0)
+            var confidenceScores = results.Take(20)
+                .Select(r => r.ConfidenceScore)
+                .Distinct()
+                .ToList();
+
+            Console.WriteLine($"\nDistinct confidence scores: {confidenceScores.Count}");
+            Assert.IsTrue(confidenceScores.Count > 1,
+                "Should have varying confidence scores, not all 1.0 (v3.42.0 fix)");
+
+            // Note: Severity may all be "Normal" for test data similar to training data
+            // This is expected behavior - severity varies for truly out-of-distribution data
+            var severityLevels = results.Take(20)
+                .Select(r => r.Severity)
+                .Distinct()
+                .ToList();
+
+            Console.WriteLine($"Distinct severity levels: {severityLevels.Count}");
+
+            Console.WriteLine("\n✅ v3.42.0 verified - TransformWithSafety returns non-zero distances with varying confidence scores!");
+        }
+
+        [TestMethod]
+        public void Test_V3421_Save_Load_TransformWithSafety_NonZero_Distances()
+        {
+            string tempFile = Path.Combine(Path.GetTempPath(), $"umap_test_{Guid.NewGuid()}.umap");
+
+            try
+            {
+                using (var model = new UMapModel())
+                {
+                    // Train model
+                    var embedding = model.Fit(_testData,
+                        embeddingDimension: 2,
+                        nNeighbors: 15,
+                        nEpochs: 30);
+
+                    Assert.IsNotNull(embedding, "Training should produce embedding");
+
+                    // Save to temp file
+                    model.Save(tempFile);
+                    Console.WriteLine($"Model saved to: {tempFile}");
+                }
+
+                // Load fresh instance
+                using (var loadedModel = UMapModel.Load(tempFile))
+                {
+                    Console.WriteLine("Model loaded successfully");
+
+                    // Transform new data with TransformWithSafety
+                    float[,] newData = GenerateTestData(50, TestFeatures, seed: 999);
+                    var results = loadedModel.TransformWithSafety(newData);
+
+                    Assert.IsNotNull(results, "TransformWithSafety should return results");
+                    Assert.AreEqual(50, results.Length, "Should have 50 results");
+
+                    // Check for non-zero distances
+                    var hasNonZero = false;
+                    double minDist = double.MaxValue;
+                    double maxDist = double.MinValue;
+
+                    for (int i = 0; i < Math.Min(results.Length, 10); i++)
+                    {
+                        var result = results[i];
+                        if (result.NearestNeighborDistances != null &&
+                            result.NearestNeighborDistances.Length > 0)
+                        {
+                            double firstDist = result.NearestNeighborDistances[0];
+                            if (firstDist > 0)
+                            {
+                                hasNonZero = true;
+                            }
+                            minDist = Math.Min(minDist, firstDist);
+                            maxDist = Math.Max(maxDist, firstDist);
+                        }
+                    }
+
+                    Console.WriteLine($"\n=== After Save/Load ===");
+                    Console.WriteLine($"Has non-zero distances: {hasNonZero}");
+                    Console.WriteLine($"Min distance: {minDist:F6}");
+                    Console.WriteLine($"Max distance: {maxDist:F6}");
+
+                    // CRITICAL ASSERT: After save/load, should still have non-zero distances
+                    Assert.IsTrue(hasNonZero,
+                        "TransformWithSafety should return non-zero embedding distances after save/load (v3.42.1 fix)");
+
+                    Console.WriteLine("\n✅ v3.42.1 verified - Save/Load preserves TransformWithSafety functionality!");
+                }
+            }
+            finally
+            {
+                // Cleanup
+                if (File.Exists(tempFile))
+                {
+                    File.Delete(tempFile);
+                    Console.WriteLine($"Cleaned up: {tempFile}");
+                }
+            }
+        }
+
         #region Helper Methods
 
         private static float[,] GenerateTestData(int nSamples, int nFeatures, int seed = 42)

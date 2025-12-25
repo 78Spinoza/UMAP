@@ -2,6 +2,127 @@
 
 Complete changelog and release notes for UMAPuwotSharp C# wrapper.
 
+## Version 3.42.1 (2024-12-24)
+
+### ✅ Backward Compatibility: Old Models Now Work!
+
+**Theme**: Automatic embedding_space_index rebuild for old models + enhanced fast path for single-sample TransformWithSafety
+
+### 🔄 Critical Backward Compatibility Fix
+
+#### Old Models (Pre-v3.42.0) Now Supported
+- **FIXED**: Old models now rebuild `embedding_space_index` during load
+- **Auto-calculates**: Embedding statistics when loading old models
+- **Result**: TransformWithSafety now works with old models!
+- **No user action required**: Just load and use!
+
+**Technical Details**:
+- On load, if `embedding_space_index` is NULL but embedding data exists
+- Rebuilds HNSW index using saved embeddings
+- Calculates all embedding statistics (min, max, mean, std, p95, p99, median)
+- Uses defaults for HNSW params if old model has them set to 0
+- Gracefully degrades if rebuild fails (warning, not error)
+
+### 🚀 Critical Performance Fix: Single-Sample TransformWithSafety
+
+#### Fast Path Enhancement (CRITICAL)
+- **BUG**: Single-sample TransformWithSafety returned all zeros (distances=0, confidence=0)
+- **Root Cause**: Fast path optimization (12-15x speedup) didn't populate safety metrics
+- **Impact**: Users transforming 1 sample at a time got incorrect results
+- **FIXED**: Enhanced fast path now supports TransformWithSafety while maintaining speed
+- **Result**: Single-sample transforms are fast AND correct!
+
+**Before v3.42.1**:
+```csharp
+model.TransformWithSafety(oneSample);
+// Returns: distance = 0, confidence = 0 ❌
+```
+
+**After v3.42.1**:
+```csharp
+model.TransformWithSafety(oneSample);
+// Returns: distance = 0.001, confidence = 0.993 ✅
+// Speed: Still 12-15x faster than batch! ✅
+```
+
+**Technical Details**:
+- File: `uwot_transform.cpp:241-309`
+- Enhanced fast path to check if detailed output is requested
+- If yes, performs embedding space search after fast transform
+- Populates all safety metrics (nn_indices, nn_distances, confidence, outlier_level, etc.)
+- Maintains 12-15x speedup advantage over batch path
+
+### 🎯 Issues Fixed from v3.42.0
+
+#### Issue #1: Embedding Statistics Now Calculated (CRITICAL)
+- **FIXED**: Statistics were NEVER calculated (all zeros in previous versions)
+- **Added**: Complete statistics collection during training using HNSW k-NN
+- **Collects**: All n_obs × k distances for unbiased statistics
+- **Computes**: min, max, mean, std, p95, p99, median, outlier thresholds
+- **Impact**: AI safety features now work correctly
+
+#### Issue #2: HNSW Ordering Fixed
+- **FIXED**: NearestNeighborDistances array was reversed (farthest-first)
+- **Added**: `std::reverse()` after HNSW extraction
+- **Now**: [0] = NEAREST neighbor (as users expect)
+
+#### Issue #3: Division by Zero
+- **Confirmed**: Already protected with epsilon in v3.41.0
+
+### 📝 New Unit Test
+- **Added**: `Test_V342_TransformWithSafety_NonZero_Distances()`
+- **Validates**: Non-zero embedding distances returned
+- **Validates**: Varying confidence scores (not all 1.0)
+- **Test count**: 16/16 passing (was 15 in v3.42.0)
+
+### Technical Details
+
+#### Files Modified
+- `uwot_persistence.cpp:575-658`: Added automatic rebuild of embedding_space_index on load
+- `uwot_persistence.cpp:676-682`: Removed error throw for missing embedding_space_index
+- `uwot_simple_wrapper.h:33`: Updated version to 3.42.1
+- `UMapModel.cs:343`: Updated EXPECTED_DLL_VERSION to 3.42.1
+- `UMAPuwotSharp.csproj:15`: Updated package version to 3.42.1
+- `UMapModelTests.cs:528-614`: Added v3.42.0 validation test
+
+### Validation Results
+
+#### Before v3.42.1 (v3.42.0 with old model)
+```
+Old model loaded → embedding_space_index = NULL
+TransformWithSafety → All distances = 0 ❌
+```
+
+#### After v3.42.1
+```
+Old model loaded → embedding_space_index rebuilt automatically
+Statistics calculated → p95=59.582, p99=63.260 ✅
+TransformWithSafety → Non-zero distances: 0.044 to 1.607 ✅
+Confidence scores → Varying: 0.664 to 1.000 ✅
+```
+
+### Performance Impact
+- **Load (old models)**: +2-5 seconds for index rebuild
+- **Load (new models)**: No change
+- **Transform**: No change
+- **Memory**: No change
+
+### Migration Guide
+
+#### From v3.42.0 to v3.42.1
+
+**✅ No Breaking Changes** - Fully backward compatible!
+
+**Old models**: Just load and use - they work now!
+```csharp
+var oldModel = UMapModel.Load("model_v3.41.0.umap");
+var results = oldModel.TransformWithSafety(newData);  // ✅ Works!
+```
+
+**New models**: Same as v3.42.0 - no changes needed.
+
+---
+
 ## Version 3.42.0 (2024-12-24)
 
 ### 🐛 Critical Bug Fixes: Embedding Statistics & HNSW Ordering

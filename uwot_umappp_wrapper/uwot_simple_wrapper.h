@@ -30,7 +30,7 @@ extern "C" {
 #define UWOT_ERROR_CRC_MISMATCH -7
 
 // Version information
-#define UWOT_WRAPPER_VERSION_STRING "3.42.0"
+#define UWOT_WRAPPER_VERSION_STRING "3.42.2"
 
 // Distance metrics
     typedef enum {
