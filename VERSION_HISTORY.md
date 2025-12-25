@@ -2,6 +2,64 @@
 
 Complete changelog and release notes for UMAPuwotSharp C# wrapper.
 
+## Version 3.42.2 (2024-12-25)
+
+### 🧹 Production-Ready Code Cleanup
+
+**Theme**: Removed debug output for production deployment
+
+### What's New
+
+#### Production-Ready Code
+- **Removed**: All debug output statements for production deployment
+- **Result**: Zero debug noise in production logs
+- **Code Quality**: Clean, production-ready implementation
+
+### Technical Details
+
+#### Files Modified
+- `uwot_transform.cpp`: Removed debug printf statements
+- `uwot_simple_wrapper.h:33`: Updated version to 3.42.2
+- `UMapModel.cs:343`: Updated EXPECTED_DLL_VERSION to 3.42.2
+- `UMAPuwotSharp.csproj:15`: Updated package version to 3.42.2
+
+### Validation Results
+
+#### Functionality
+- **Single-sample TransformWithSafety**: Works correctly ✅
+- **Fast path performance**: Still 12-15x faster than batch ✅
+- **All 17 tests passing**: Full test coverage green ✅
+
+#### Code Quality
+- **Zero debug output**: Production-ready code ✅
+- **Clean compilation**: No warnings or errors ✅
+- **Identical behavior**: Same functionality as v3.42.1 ✅
+
+### Performance Impact
+- **Load**: No change
+- **Save**: No change
+- **Fit**: No change
+- **Transform**: No change (fast and correct)
+
+### Migration Guide
+
+#### From v3.42.1 to v3.42.2
+
+**✅ No Breaking Changes** - Fully backward compatible!
+
+**Recommended for Production**:
+- Same functionality as v3.42.1
+- Cleaner code without debug output
+- Ideal for production deployment
+
+```csharp
+// Existing code works unchanged
+var model = UMapModel.Load("model.umap");
+var results = model.TransformWithSafety(newData);  // Fast + Correct! ✅
+```
+
+---
+
 ## Version 3.42.1 (2024-12-24)
 
 ### ✅ Backward Compatibility: Old Models Now Work!

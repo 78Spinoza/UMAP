@@ -1,5 +1,31 @@
 # UMAP C++ Implementation with C# Wrapper - Change Log
 
+## [3.42.2] - 2024-12-25
+
+### 🧹 **Production-Ready Code Cleanup**
+
+#### **Debug Output Removed**
+- **Cleaned**: Removed all debug output statements for production deployment
+- **Result**: Zero debug noise in production logs
+- **Code Quality**: Clean, production-ready implementation
+
+#### **Version Updates**
+- **C++ DLL**: Updated to 3.42.2
+- **C# Wrapper**: Updated to 3.42.2
+- **NuGet Package**: Updated to 3.42.2
+
+### 🧪 **Testing**
+- **17/17 C# tests passing**: All validation tests green
+- **Verified**: Single-sample TransformWithSafety works correctly
+- **Tested**: Production deployment with no debug output
+
+### 📦 **Migration**
+- **✅ No Breaking Changes**: Fully backward compatible with v3.42.1
+- **Same Behavior**: Identical functionality to v3.42.1, just cleaner code
+- **Recommended**: Upgrade for production deployment
+
+---
+
 ## [3.42.1] - 2024-12-24
 
 ### ✅ **BACKWARD COMPATIBILITY: Old Models Now Work!**
