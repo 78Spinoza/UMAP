@@ -2013,7 +2013,7 @@ HNSW acceleration works with multiple distance metrics:
 ## Version Information
 
 - **Enhanced Native Libraries**: Based on uwot algorithms with revolutionary HNSW optimization
-- **C# Wrapper**: Version 3.3.0+ (UMAPuwotSharp with HNSW optimization)
+- **C# Wrapper**: Version 3.42.2+ (UMAPuwotSharp with HNSW optimization)
 - **Target Framework**: .NET 8.0
 - **Supported Platforms**: Windows x64, Linux x64 (both with HNSW optimization)
 - **Key Features**: HNSW k-NN optimization, Production safety, Multi-dimensional (1D-50D), Multi-metric, Enhanced progress reporting, OpenMP parallelization
@@ -2022,6 +2022,9 @@ HNSW acceleration works with multiple distance metrics:
 
 | Version | Release Date | Key Features | Performance |
 |---------|--------------|--------------|-------------|
+| **3.42.2** | 2024-12-25 | **Production-ready code cleanup**, Removed debug output, Zero compilation warnings, **17/17 tests passing**, Clean deployment | Production-ready deployment |
+| **3.42.1** | 2024-12-24 | **Fixed single-sample TransformWithSafety**, Enhanced fast path with safety metrics (12-15x speedup), **Automatic embedding_space_index rebuild for old models**, Backward compatibility maintained | Single-sample fix + old model support |
+| **3.42.0** | 2024-12-24 | **Embedding statistics now calculated** (CRITICAL fix), **HNSW ordering fixed** (nearest-first), AI safety metrics working correctly, Outlier detection operational | Statistics calculation + ordering fix |
 | **3.41.0** | 2025-11-07 | **Fixed access violation on load**, **20x larger file support** (100MB→2GB), **LZ4 overflow protection**, **LoadWithCallbacks() API**, **Fail-fast HNSW validation**, **Save/load/TransformWithSafety test**, **Production persistence reliability** | Critical load fix + large model support |
 | **3.40.0** | 2025-10-31 | **InitializationMethod enum** (clear API), **Spectral default** (best quality out-of-the-box), **API clarity** (replaced boolean with enum), **Backward compatibility** (obsolete property), **Dynamic metadata** (model-extracted params), **Clean compilation** (zero warnings) | Initialization API enhancement |
 | **3.39.0** | 2025-10-27 | **AlwaysUseSpectral property** (force spectral init), **Eigen compilation fix** (MSVC + performance), **LocalConnectivity & Bandwidth integration**, **Bandwidth sweep testing**, Enhanced visualization titles, Spectral quality boost | Advanced algorithms revolution |
@@ -2065,7 +2068,7 @@ model.SaveModel("model.umap");  // Stream-based serialization with integrity che
 var loadedModel = UMapModel.LoadModel("model.umap");  // Automatic corruption detection
 ```
 
-**Recommendation**: Upgrade to v3.40.0 for the clearer InitializationMethod API with spectral default, ensuring best quality embeddings out-of-the-box with explicit control options.
+**Recommendation**: Upgrade to v3.42.2 for production-ready code with fully working single-sample TransformWithSafety, automatic old model support, and clean deployment with zero debug output.
 
 ## References
 
