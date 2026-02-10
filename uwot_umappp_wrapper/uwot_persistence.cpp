@@ -184,7 +184,7 @@ namespace persistence_utils {
         try {
             // Magic number and version
             constexpr uint32_t MAGIC = 0x554D4150; // "UMAP"
-            constexpr uint32_t FORMAT_VERSION = 1;
+            constexpr uint32_t FORMAT_VERSION = 2;  // v2: Added embedding space statistics
             uwot::endian_utils::write_value(file, MAGIC);
             uwot::endian_utils::write_value(file, FORMAT_VERSION);
             file.write(UWOT_WRAPPER_VERSION_STRING, 16);
@@ -235,6 +235,19 @@ namespace persistence_utils {
             uwot::endian_utils::write_value(file, model->median_original_distance);
             uwot::endian_utils::write_value(file, model->exact_match_threshold);
             uwot::endian_utils::write_value(file, model->hnsw_recall_percentage);
+
+            // CRITICAL: Embedding space statistics (for TransformWithSafety)
+            // Always save in v2+ format (handled by FORMAT_VERSION check on load)
+            uwot::endian_utils::write_value(file, model->mean_embedding_distance);
+            uwot::endian_utils::write_value(file, model->std_embedding_distance);
+            uwot::endian_utils::write_value(file, model->min_embedding_distance);
+            uwot::endian_utils::write_value(file, model->max_embedding_distance);
+            uwot::endian_utils::write_value(file, model->p95_embedding_distance);
+            uwot::endian_utils::write_value(file, model->p99_embedding_distance);
+            uwot::endian_utils::write_value(file, model->median_embedding_distance);
+            uwot::endian_utils::write_value(file, model->mild_embedding_outlier_threshold);
+            uwot::endian_utils::write_value(file, model->extreme_embedding_outlier_threshold);
+            uwot::endian_utils::write_value(file, model->exact_embedding_match_threshold);
 
             // Normalization
             const bool has_normalization = !model->feature_means.empty() && !model->feature_stds.empty();
@@ -446,6 +459,21 @@ namespace persistence_utils {
                 !read(model->extreme_original_outlier_threshold) || !read(model->median_original_distance) ||
                 !read(model->exact_match_threshold) || !read(model->hnsw_recall_percentage)) {
                 throw std::runtime_error("Failed to read neighbor stats");
+            }
+
+            // CRITICAL: Embedding space statistics (for TransformWithSafety)
+            // FORMAT_VERSION 2+ includes these statistics
+            if (format_version >= 2) {
+                if (!read(model->mean_embedding_distance) || !read(model->std_embedding_distance) ||
+                    !read(model->min_embedding_distance) || !read(model->max_embedding_distance) ||
+                    !read(model->p95_embedding_distance) || !read(model->p99_embedding_distance) ||
+                    !read(model->median_embedding_distance) || !read(model->mild_embedding_outlier_threshold) ||
+                    !read(model->extreme_embedding_outlier_threshold) || !read(model->exact_embedding_match_threshold)) {
+                    throw std::runtime_error("Failed to read embedding space stats");
+                }
+            } else {
+                // Old file format (v1) - embedding stats will be recalculated from embedding index if available
+                // The transform code handles uninitialized stats (all 0) gracefully
             }
 
             // Normalization

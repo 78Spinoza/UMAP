@@ -1,0 +1,463 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>UMAPuwotSharp</name>
+    </assembly>
+    <members>
+        <member name="T:UMAPuwotSharp.DistanceMetric">
+            <summary>
+            Distance metrics supported by Enhanced UMAP
+            </summary>
+        </member>
+        <member name="F:UMAPuwotSharp.DistanceMetric.Euclidean">
+            <summary>
+            Euclidean distance (L2 norm) - most common choice for general data
+            </summary>
+        </member>
+        <member name="F:UMAPuwotSharp.DistanceMetric.Cosine">
+            <summary>
+            Cosine distance - excellent for high-dimensional sparse data (text, images)
+            </summary>
+        </member>
+        <member name="F:UMAPuwotSharp.DistanceMetric.Manhattan">
+            <summary>
+            Manhattan distance (L1 norm) - robust to outliers
+            </summary>
+        </member>
+        <member name="F:UMAPuwotSharp.DistanceMetric.Correlation">
+            <summary>
+            Correlation distance - measures linear relationships, good for time series
+            </summary>
+        </member>
+        <member name="F:UMAPuwotSharp.DistanceMetric.Hamming">
+            <summary>
+            Hamming distance - for binary or categorical data
+            </summary>
+        </member>
+        <member name="T:UMAPuwotSharp.InitializationMethod">
+            <summary>
+            Initialization methods for UMAP embedding
+            </summary>
+        </member>
+        <member name="F:UMAPuwotSharp.InitializationMethod.Auto">
+            <summary>
+            Auto-select initialization based on dataset size.
+            Uses Spectral for ≤20k observations (high quality), Random for >20k (faster)
+            </summary>
+        </member>
+        <member name="F:UMAPuwotSharp.InitializationMethod.Random">
+            <summary>
+            Random initialization - fast, works for any dataset size.
+            Coordinates sampled from uniform distribution [-10, 10]
+            </summary>
+        </member>
+        <member name="F:UMAPuwotSharp.InitializationMethod.Spectral">
+            <summary>
+            Spectral initialization - high quality but slower for large datasets.
+            Uses eigendecomposition of graph Laplacian (O(n³) complexity).
+            Recommended for datasets ≤20k observations for best quality.
+            </summary>
+        </member>
+        <member name="T:UMAPuwotSharp.OutlierLevel">
+            <summary>
+            Outlier severity levels for Enhanced UMAP safety analysis
+            </summary>
+        </member>
+        <member name="F:UMAPuwotSharp.OutlierLevel.Normal">
+            <summary>
+            Normal data point - within 95th percentile of training data distances
+            </summary>
+        </member>
+        <member name="F:UMAPuwotSharp.OutlierLevel.Unusual">
+            <summary>
+            Unusual data point - between 95th and 99th percentile of training data distances
+            </summary>
+        </member>
+        <member name="F:UMAPuwotSharp.OutlierLevel.Mild">
+            <summary>
+            Mild outlier - between 99th percentile and 2.5 standard deviations from mean
+            </summary>
+        </member>
+        <member name="F:UMAPuwotSharp.OutlierLevel.Extreme">
+            <summary>
+            Extreme outlier - between 2.5 and 4.0 standard deviations from mean
+            </summary>
+        </member>
+        <member name="F:UMAPuwotSharp.OutlierLevel.NoMansLand">
+            <summary>
+            No man's land - beyond 4.0 standard deviations from training data
+            Projection may be unreliable
+            </summary>
+        </member>
+        <member name="T:UMAPuwotSharp.TransformResult">
+            <summary>
+            Enhanced transform result with comprehensive safety metrics and outlier detection
+            Available only with HNSW-optimized models for production safety
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.TransformResult.ProjectionCoordinates">
+            <summary>
+            Gets the projected coordinates in the embedding space (1-50D)
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.TransformResult.NearestNeighborIndices">
+            <summary>
+            Gets the indices of nearest neighbors in the original training data
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.TransformResult.NearestNeighborDistances">
+            <summary>
+            Gets the distances to nearest neighbors in the original feature space
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.TransformResult.ConfidenceScore">
+            <summary>
+            Gets the confidence score for the projection (0.0 - 1.0)
+            Higher values indicate the point is similar to training data
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.TransformResult.Severity">
+            <summary>
+            Gets the outlier severity level based on distance from training data
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.TransformResult.PercentileRank">
+            <summary>
+            Gets the percentile rank of the point's distance (0-100)
+            Lower percentiles indicate similarity to training data
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.TransformResult.ZScore">
+            <summary>
+            Gets the Z-score relative to training data neighbor distances
+            Values beyond ±2.5 indicate potential outliers
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.TransformResult.EmbeddingDimension">
+            <summary>
+            Gets the dimensionality of the projection coordinates
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.TransformResult.NeighborCount">
+            <summary>
+            Gets the number of nearest neighbors analyzed
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.TransformResult.IsReliable">
+            <summary>
+            Gets whether the projection is considered reliable for production use
+            Based on comprehensive safety analysis
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.TransformResult.QualityAssessment">
+            <summary>
+            Gets a human-readable interpretation of the result quality
+            </summary>
+        </member>
+        <member name="M:UMAPuwotSharp.TransformResult.ToString">
+            <summary>
+            Returns a comprehensive string representation of the transform result
+            </summary>
+            <returns>A formatted string with key safety metrics</returns>
+        </member>
+        <member name="T:UMAPuwotSharp.ProgressCallback">
+            <summary>
+            Enhanced progress callback delegate for training progress reporting with phase information and loss values
+            </summary>
+            <param name="phase">Current phase (e.g., "Normalizing", "Building HNSW", "Training Epoch")</param>
+            <param name="current">Current progress counter (e.g., current epoch)</param>
+            <param name="total">Total items to process (e.g., total epochs)</param>
+            <param name="percent">Progress percentage (0-100)</param>
+            <param name="message">Additional information like loss values, time estimates, or warnings</param>
+        </member>
+        <member name="T:UMAPuwotSharp.UMapModel">
+            <summary>
+            Enhanced cross-platform C# wrapper for UMAP dimensionality reduction
+            Based on the proven uwot R package with enhanced features:
+            - Arbitrary embedding dimensions (1D to 50D, including 27D)
+            - Multiple distance metrics (Euclidean, Cosine, Manhattan, Correlation, Hamming)
+            - Complete model save/load functionality
+            - True out-of-sample projection (transform new data)
+            - Progress reporting with callback support
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.UMapModel.IsFitted">
+            <summary>
+            Gets whether the model has been fitted with training data
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.UMapModel.ModelInfo">
+            <summary>
+            Gets comprehensive information about the fitted model
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.UMapModel.InitMethod">
+            <summary>
+            Gets or sets the initialization method for the embedding.
+            Default: Spectral (highest quality initialization using graph Laplacian eigendecomposition)
+            Note: For very large datasets (>50k), consider using Auto or Random for better performance
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.UMapModel.AlwaysUseSpectral">
+            <summary>
+            [Deprecated] Gets or sets whether to always use spectral initialization regardless of dataset size.
+            Use InitMethod property instead for more control.
+            Default: false (auto-select based on size: >20k samples = random, ≤20k = spectral)
+            Set to true to force spectral initialization for large datasets (slower but may improve quality)
+            </summary>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.#ctor">
+            <summary>
+            Creates a new Enhanced UMAP model instance
+            </summary>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.Load(System.String)">
+            <summary>
+            Loads an Enhanced UMAP model from a file (static method, no callbacks)
+            </summary>
+            <param name="filename">Path to the model file</param>
+            <returns>A new UMapModel instance loaded from the specified file</returns>
+            <exception cref="T:System.ArgumentException">Thrown when filename is null or empty</exception>
+            <exception cref="T:System.IO.FileNotFoundException">Thrown when the specified file does not exist</exception>
+            <exception cref="T:System.IO.InvalidDataException">Thrown when the file cannot be loaded as a valid model</exception>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.LoadWithCallbacks(System.String,UMAPuwotSharp.ProgressCallback)">
+            <summary>
+            Loads an Enhanced UMAP model from a file with callback support for monitoring load progress/errors
+            </summary>
+            <param name="filename">Path to the model file</param>
+            <param name="progressCallback">Optional callback for progress and error messages during load</param>
+            <returns>A new UMapModel instance loaded from the specified file</returns>
+            <exception cref="T:System.ArgumentException">Thrown when filename is null or empty</exception>
+            <exception cref="T:System.IO.FileNotFoundException">Thrown when the specified file does not exist</exception>
+            <exception cref="T:System.IO.InvalidDataException">Thrown when the file cannot be loaded as a valid model</exception>
+            <example>
+            <code>
+            var model = UMapModel.LoadWithCallbacks("model.umap", (phase, current, total, percent, message) => {
+                Console.WriteLine($"[{phase}] {message}");
+            });
+            </code>
+            </example>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.GetVersion">
+            <summary>
+            Gets the version string from the native UMAP library
+            </summary>
+            <returns>Version string (e.g., "3.21.0")</returns>
+            <exception cref="T:System.InvalidOperationException">Thrown when version cannot be retrieved</exception>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.CalculateOptimalSpread(System.Int32)">
+            <summary>
+            Calculates optimal spread parameter based on embedding dimensions
+            Research-based defaults for different dimensional use cases
+            </summary>
+            <param name="embeddingDimension">Target embedding dimension</param>
+            <returns>Optimal spread value</returns>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.CalculateOptimalMinDist(System.Int32)">
+            <summary>
+            Calculates optimal min_dist parameter based on embedding dimensions
+            </summary>
+            <param name="embeddingDimension">Target embedding dimension</param>
+            <returns>Optimal min_dist value</returns>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.CalculateOptimalNeighbors(System.Int32)">
+            <summary>
+            Calculates optimal n_neighbors parameter based on embedding dimensions
+            </summary>
+            <param name="embeddingDimension">Target embedding dimension</param>
+            <returns>Optimal n_neighbors value</returns>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.Fit(System.Single[0:,0:],System.Int32,System.Nullable{System.Int32},System.Nullable{System.Single},System.Nullable{System.Single},System.Int32,UMAPuwotSharp.DistanceMetric,System.Boolean,System.Int32,System.Int32,System.Int32,System.Int32,System.Boolean,System.Single,System.Single)">
+            <summary>
+            Fits the Enhanced UMAP model to training data with full customization
+            </summary>
+            <param name="data">Training data as 2D array [samples, features]</param>
+            <param name="embeddingDimension">Target embedding dimension (1-50, default: 2). Supports 27D!</param>
+            <param name="nNeighbors">Number of nearest neighbors (default: auto-optimized based on dimension)</param>
+            <param name="minDist">Minimum distance between points in embedding (default: auto-optimized based on dimension)</param>
+            <param name="spread">Global scale parameter controlling embedding spread (default: auto-optimized based on dimension)</param>
+            <param name="nEpochs">Number of optimization epochs (default: 300)</param>
+            <param name="metric">Distance metric to use (default: Euclidean)</param>
+            <param name="forceExactKnn">Force exact brute-force k-NN instead of HNSW approximation (default: false). Use for validation or small datasets.</param>
+            <param name="hnswM">HNSW graph degree parameter. -1 = auto-scale based on data size (default: -1)</param>
+            <param name="hnswEfConstruction">HNSW build quality parameter. -1 = auto-scale (default: -1)</param>
+            <param name="hnswEfSearch">HNSW query quality parameter. -1 = auto-scale (default: -1)</param>
+            <param name="randomSeed">Random seed for reproducible results (default: -1 for random seed)</param>
+            <param name="autoHNSWParam">Automatically optimize HNSW parameters based on data size (default: true)</param>
+            <param name="localConnectivity">Local connectivity parameter - controls minimum distance to nearest neighbor (default: 1.0)</param>
+            <param name="bandwidth">Bandwidth parameter - controls fuzzy kernel width in KNN smoothing. Use 2-3 for large datasets with random init (default: 1.0)</param>
+            <returns>Embedding coordinates [samples, embeddingDimension]</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when data is null</exception>
+            <exception cref="T:System.ArgumentException">Thrown when parameters are invalid</exception>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.FitWithProgress(System.Single[0:,0:],UMAPuwotSharp.ProgressCallback,System.Int32,System.Nullable{System.Int32},System.Nullable{System.Single},System.Nullable{System.Single},System.Int32,UMAPuwotSharp.DistanceMetric,System.Boolean,System.Int32,System.Boolean,System.Single,System.Single)">
+            <summary>
+            Fits the Enhanced UMAP model to training data with progress reporting
+            </summary>
+            <param name="data">Training data as 2D array [samples, features]</param>
+            <param name="progressCallback">Callback function to report training progress</param>
+            <param name="embeddingDimension">Target embedding dimension (1-50, default: 2). Supports 27D!</param>
+            <param name="nNeighbors">Number of nearest neighbors (default: auto-optimized based on dimension)</param>
+            <param name="minDist">Minimum distance between points in embedding (default: auto-optimized based on dimension)</param>
+            <param name="spread">Global scale parameter controlling embedding spread (default: auto-optimized based on dimension)</param>
+            <param name="nEpochs">Number of optimization epochs (default: 300)</param>
+            <param name="metric">Distance metric to use (default: Euclidean)</param>
+            <param name="forceExactKnn">Force exact brute-force k-NN instead of HNSW approximation (default: false). Use for validation or small datasets.</param>
+            <param name="randomSeed">Random seed for reproducible results (default: -1 for random seed)</param>
+            <param name="autoHNSWParam">Automatically optimize HNSW parameters based on data size (default: true)</param>
+            <param name="localConnectivity">Local connectivity parameter - controls minimum distance to nearest neighbor (default: 1.0)</param>
+            <param name="bandwidth">Bandwidth parameter - controls fuzzy kernel width in KNN smoothing. Use 2-3 for large datasets with random init (default: 1.0)</param>
+            <returns>Embedding coordinates [samples, embeddingDimension]</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when data or progressCallback is null</exception>
+            <exception cref="T:System.ArgumentException">Thrown when parameters are invalid</exception>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.Transform(System.Single[0:,0:])">
+            <summary>
+            Transforms new data using a fitted model (out-of-sample projection)
+            </summary>
+            <param name="newData">New data to transform [samples, features]</param>
+            <returns>Embedding coordinates [samples, embeddingDimension]</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when newData is null</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when model is not fitted</exception>
+            <exception cref="T:System.ArgumentException">Thrown when feature dimensions don't match training data</exception>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.TransformWithSafety(System.Single[0:,0:])">
+            <summary>
+            Transforms new data using a fitted model with comprehensive safety analysis (HNSW-enhanced)
+            Provides detailed outlier detection and confidence metrics for production safety
+            </summary>
+            <param name="newData">New data to transform [samples, features]</param>
+            <returns>Array of TransformResult objects with embedding coordinates and safety metrics</returns>
+            <exception cref="T:System.ArgumentNullException">Thrown when newData is null</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when model is not fitted</exception>
+            <exception cref="T:System.ArgumentException">Thrown when feature dimensions don't match training data</exception>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.Save(System.String)">
+            <summary>
+            Saves the fitted model to a file
+            </summary>
+            <param name="filename">Path where to save the model</param>
+            <exception cref="T:System.ArgumentException">Thrown when filename is null or empty</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when model is not fitted</exception>
+            <exception cref="T:System.IO.IOException">Thrown when file cannot be written</exception>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.GetMetricName(UMAPuwotSharp.DistanceMetric)">
+            <summary>
+            Gets the human-readable name of a distance metric
+            </summary>
+            <param name="metric">The distance metric</param>
+            <returns>Human-readable name of the metric</returns>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.VerifyDllVersion">
+            <summary>
+            Verifies the native DLL version matches the expected C# wrapper version
+            </summary>
+            <exception cref="T:System.InvalidOperationException">Thrown when DLL version mismatch detected</exception>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.SetGlobalCallback(UMAPuwotSharp.ProgressCallback)">
+            <summary>
+            Sets a global callback for all UMAP operations to receive warnings, errors, and status messages.
+            This callback will receive ALL warnings, errors, and status messages from any UMAP operation.
+            </summary>
+            <param name="callback">Enhanced progress callback that receives phase, progress, and message information</param>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.ClearGlobalCallback">
+            <summary>
+            Clears the global callback for UMAP operations
+            </summary>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.Dispose">
+            <summary>
+            Releases all resources used by the UMapModel
+            </summary>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.Dispose(System.Boolean)">
+            <summary>
+            Releases the unmanaged resources and optionally releases the managed resources
+            </summary>
+            <param name="disposing">true to release both managed and unmanaged resources; false to release only unmanaged resources</param>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModel.Finalize">
+            <summary>
+            Finalizer for UMapModel to ensure native resources are cleaned up
+            </summary>
+        </member>
+        <member name="T:UMAPuwotSharp.UMapModelInfo">
+            <summary>
+            Comprehensive information about a fitted Enhanced UMAP model
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.UMapModelInfo.TrainingSamples">
+            <summary>
+            Gets the number of training samples used to fit this model
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.UMapModelInfo.InputDimension">
+            <summary>
+            Gets the dimensionality of the input data
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.UMapModelInfo.OutputDimension">
+            <summary>
+            Gets the dimensionality of the output embedding (1-50D supported, including 27D)
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.UMapModelInfo.Neighbors">
+            <summary>
+            Gets the number of nearest neighbors used during training
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.UMapModelInfo.MinimumDistance">
+            <summary>
+            Gets the minimum distance parameter used during training
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.UMapModelInfo.Spread">
+            <summary>
+            Gets the spread parameter used during training (controls global scale)
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.UMapModelInfo.Metric">
+            <summary>
+            Gets the distance metric used during training
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.UMapModelInfo.HnswM">
+            <summary>
+            Gets the HNSW graph degree parameter (controls connectivity)
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.UMapModelInfo.HnswEfConstruction">
+            <summary>
+            Gets the HNSW construction quality parameter (higher = better quality, slower build)
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.UMapModelInfo.HnswEfSearch">
+            <summary>
+            Gets the HNSW search quality parameter (higher = better recall, slower queries)
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.UMapModelInfo.LocalConnectivity">
+            <summary>
+            Gets the local connectivity parameter (controls minimum distance to nearest neighbor, default 1.0)
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.UMapModelInfo.Bandwidth">
+            <summary>
+            Gets the bandwidth parameter (controls fuzzy kernel width in KNN smoothing, default 1.0, use 2-3 for large datasets)
+            </summary>
+        </member>
+        <member name="P:UMAPuwotSharp.UMapModelInfo.MetricName">
+            <summary>
+            Gets the human-readable name of the distance metric
+            </summary>
+        </member>
+        <member name="M:UMAPuwotSharp.UMapModelInfo.ToString">
+            <summary>
+            Returns a comprehensive string representation of the model information
+            </summary>
+            <returns>A formatted string describing all model parameters</returns>
+        </member>
+    </members>
+</doc>

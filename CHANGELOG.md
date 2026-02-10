@@ -1,5 +1,61 @@
 # UMAP C++ Implementation with C# Wrapper - Change Log
 
+## [3.42.3] - 2025-01-27
+
+### 🐛 **CRITICAL BUG FIX: TransformWithSafety Outlier Detection**
+
+#### **Issue: All Samples Incorrectly Classified as "No Man's Land"**
+- **Bug**: `TransformWithSafety()` always returned `OutlierLevel = 4` (No Man's Land) for all samples
+- **Root Cause**: When embedding statistics were uninitialized (value 0), comparison logic failed
+  - All thresholds (p95, p99, extreme) were 0
+  - Any `min_distance > 0` failed all threshold checks
+  - Fell through to default: `outlier_level = 4` (No Man's Land)
+- **Impact**: Completely broken outlier detection - ALL samples flagged as unreliable
+
+#### **Fix Applied**
+
+**1. Graceful Default Handling**:
+- Added check for `extreme_embedding_outlier_threshold <= 0`
+- If uninitialized, default to `Normal` (level 0) instead of No Man's Land
+- Applied to both fast path (single-sample) and batch path
+- **Location**: `uwot_transform.cpp:284`, `uwot_transform.cpp:747`
+
+**2. Persistent Embedding Statistics**:
+- Embedding statistics now saved/loaded with models
+- **FORMAT_VERSION**: 1 → 2 (backward compatible)
+- **Saves**: mean, std, min, max, p95, p99, median, outlier thresholds
+- **Old model files**: Still work - statistics recalculated on load if needed
+- **Location**: `uwot_persistence.cpp:188`, `uwot_persistence.cpp:229-244`
+
+#### **Code Changes**
+- `uwot_simple_wrapper.h`: Version string "3.42.2" → "3.42.3"
+- `uwot_transform.cpp`: Added uninitialized stats check (2 locations)
+- `uwot_persistence.cpp`: FORMAT_VERSION 2, save/load embedding stats
+- `UMapModel.cs`: Expected version "3.42.2" → "3.42.3"
+- `README.md`: Added v3.42.3 release notes
+
+#### **Testing**
+- ✅ All 17 unit tests passing
+- ✅ Save/load tests verified (Test_Separate_Objects_Save_Load, Test_Model_Persistence, Test_Persistence_With_TransformWithSafety)
+- ✅ Demo runs successfully with proper outlier classification
+- ✅ Backward compatible with old model files
+
+#### **Verification**
+**Before fix**: All samples → No Man's Land (level 4) ❌
+**After fix**: Proper classification (Normal, Unusual, Mild Outlier, Extreme Outlier, No Man's Land) ✅
+
+#### **Backward Compatibility**
+- Old model files (FORMAT_VERSION 1): Load successfully, use graceful defaults
+- New model files (FORMAT_VERSION 2): Persistent embedding statistics
+- TransformWithSafety: Works correctly on both old and new models
+
+#### **Migration**
+- **✅ No Breaking Changes**: Fully backward compatible with v3.42.2
+- **Recommended**: Upgrade for correct outlier detection
+- **Action Required**: Rebuild models to get persistent statistics (optional but recommended)
+
+---
+
 ## [3.42.2] - 2024-12-25
 
 ### 🧹 **Production-Ready Code Cleanup**

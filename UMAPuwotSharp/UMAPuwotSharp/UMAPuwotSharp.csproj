@@ -12,7 +12,7 @@
     <!-- Enhanced NuGet metadata -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <PackageId>UMAPuwotSharp</PackageId>
-    <Version>3.42.2</Version>
+    <Version>3.42.3</Version>
     <Authors>Amin Gholiha</Authors>
     <Company>ID Soft AB</Company>
     <Product>UMAPuwotSharp Enhanced with HNSW</Product>
@@ -25,9 +25,45 @@
     <PackageProjectUrl>https://github.com/78Spinoza/UMAP</PackageProjectUrl>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageReleaseNotes><![CDATA[
-🎉 CRITICAL FIX - UMAP v3.41.0: Model Persistence & Large File Support
+🎉 CRITICAL BUG FIX - UMAP v3.42.3: TransformWithSafety Outlier Detection
 
-🚀 UPGRADE RECOMMENDED: Fixed critical load issues + 20x larger file support!
+🚨 **CRITICAL FIX**: All samples incorrectly classified as "No Man's Land"
+
+🐛 **Issue**:
+- TransformWithSafety() always returned OutlierLevel = 4 (No Man's Land)
+- Root cause: Uninitialized embedding statistics (all 0) caused comparison logic to fail
+- Impact: Completely broken outlier detection - ALL samples flagged as unreliable
+
+✅ **Fix Applied**:
+1. Graceful Default Handling: Check if statistics are initialized before classification
+   - If extreme_embedding_outlier_threshold <= 0, default to Normal (level 0)
+   - Prevents incorrect "No Man's Land" classification
+   - Applied to both fast path (single-sample) and batch path
+
+2. Persistent Embedding Statistics: Statistics now saved/loaded with models
+   - FORMAT_VERSION bumped to 2 (backward compatible)
+   - Saves: mean, std, min, max, p95, p99, median, outlier thresholds
+   - Old model files (v1) still work - statistics recalculated on load if needed
+
+🔧 **Technical Changes**:
+- uwot_transform.cpp: Added uninitialized stats check (lines 284, 747)
+- uwot_persistence.cpp: FORMAT_VERSION 2, save/load embedding stats
+- uwot_simple_wrapper.h: Version string "3.42.3"
+- UMapModel.cs: Expected version "3.42.3"
+
+✅ **Verification**:
+- All 17 unit tests passing
+- Save/load tests verified
+- Demo runs successfully
+- Backward compatible with old model files
+
+🎯 **Impact**:
+- Old models: Work correctly with graceful defaults
+- New models: Proper outlier detection with persistent statistics
+- TransformWithSafety: Now returns meaningful outlier levels
+- Production safety features: Working correctly
+
+🎉 CONTINUES v3.42.2 FEATURES
 
 🐛 CRITICAL FIXES v3.41.0: Model Load & Size Limits
 

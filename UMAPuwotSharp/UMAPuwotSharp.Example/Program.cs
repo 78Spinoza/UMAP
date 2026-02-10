@@ -106,7 +106,9 @@ namespace UMAPExample
                         }
 
                         var lossInfo = !string.IsNullOrEmpty(message) ? $" - {message}" : "";
-                        Console.Write($"\r  Progress: [{new string(progressBar)}] {percent:F1}% (Epoch {current}/{total}){lossInfo}");
+                        // Add padding to clear leftover characters on Linux
+                        var line = $"\r  Progress: [{new string(progressBar)}] {percent:F1}% (Epoch {current}/{total}){lossInfo}";
+                        Console.Write(line + new string(' ', Math.Max(0, 120 - line.Length)));
                     }
                 },
                 embeddingDimension: embeddingDim,
@@ -154,7 +156,8 @@ namespace UMAPExample
                         if (current % 25 == 0 || current == total) // Report every 25 epochs
                         {
                             string msg = !string.IsNullOrEmpty(message) ? $" ({message})" : "";
-                            Console.Write($"\r    {phase} {dim}D: {percent:F0}%{msg} ");
+                            var line = $"\r    {phase} {dim}D: {percent:F0}%{msg}";
+                            Console.Write(line + new string(' ', Math.Max(0, 80 - line.Length)));
                         }
                     };
                 }
@@ -231,7 +234,8 @@ namespace UMAPExample
                             if (current % 20 == 0 || current == total)
                             {
                                 var lossInfo = !string.IsNullOrEmpty(message) ? $" - {message}" : "";
-                                Console.Write($"\r  Training progress: {percent:F0}% (Epoch {current}/{total}){lossInfo}");
+                                var line = $"\r  Training progress: {percent:F0}% (Epoch {current}/{total}){lossInfo}";
+                                Console.Write(line + new string(' ', Math.Max(0, 100 - line.Length)));
                             }
                         },
                         embeddingDimension: 5,
@@ -312,7 +316,8 @@ namespace UMAPExample
                         if (current % 15 == 0 || current == total)
                         {
                             var lossInfo = !string.IsNullOrEmpty(message) ? $" - {message}" : "";
-                            Console.Write($"\r  {metricName}: {percent:F0}%{lossInfo} ");
+                            var line = $"\r  {metricName}: {percent:F0}%{lossInfo}";
+                            Console.Write(line + new string(' ', Math.Max(0, 80 - line.Length)));
                         }
                     },
                     embeddingDimension: 2,
@@ -350,7 +355,8 @@ namespace UMAPExample
                 {
                     if (current % 30 == 0 || current == total)
                     {
-                        Console.Write($"\r  Training: {percent:F0}%");
+                        var line = $"\r  Training: {percent:F0}%";
+                        Console.Write(line + new string(' ', Math.Max(0, 40 - line.Length)));
                     }
                 },
                 embeddingDimension: 10,

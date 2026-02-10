@@ -281,7 +281,10 @@ namespace transform_utils {
                             }
 
                             if (outlier_level) {
-                                if (min_distance <= model->p95_embedding_distance) {
+                                // CRITICAL FIX: Check if embedding statistics are initialized
+                                if (model->extreme_embedding_outlier_threshold <= 0.0f) {
+                                    outlier_level[0] = 0; // Default to Normal if stats unavailable
+                                } else if (min_distance <= model->p95_embedding_distance) {
                                     outlier_level[0] = 0; // Normal
                                 } else if (min_distance <= model->p99_embedding_distance) {
                                     outlier_level[0] = 1; // Unusual
@@ -744,7 +747,15 @@ namespace transform_utils {
 
                     // AI outlier level assessment based on embedding space
                     if (outlier_level) {
-                        if (min_distance <= model->p95_embedding_distance) {
+                        // CRITICAL FIX: Check if embedding statistics are initialized
+                        // If extreme_embedding_outlier_threshold is 0, statistics were never calculated
+                        // (old model or failed rebuild). In this case, default to Normal (0)
+                        // instead of incorrectly classifying everything as No Man's Land (4)
+                        if (model->extreme_embedding_outlier_threshold <= 0.0f) {
+                            // Statistics not available - assume Normal as safe default
+                            outlier_level[i] = 0;
+                        }
+                        else if (min_distance <= model->p95_embedding_distance) {
                             outlier_level[i] = 0; // Normal - AI has seen similar patterns
                         }
                         else if (min_distance <= model->p99_embedding_distance) {

@@ -1,7 +1,44 @@
 # Enhanced High-Performance UMAP C++ Implementation with C# Wrapper
 
 
-## 🎉 Latest Release: v3.42.2 (2024-12-25)
+## 🎉 Latest Release: v3.42.3 (2025-01-27)
+
+### 🐛 Critical Bug Fix: TransformWithSafety Outlier Detection
+
+**Issue: All Samples Incorrectly Classified as "No Man's Land"** 🚨
+- **Bug**: `TransformWithSafety()` always returned `OutlierLevel = 4` (No Man's Land) for all samples
+- **Root Cause**: When embedding statistics were uninitialized (value 0), comparison logic failed:
+  - All thresholds (p95, p99, extreme) were 0
+  - Any `min_distance > 0` failed all threshold checks
+  - Fell through to default: `outlier_level = 4` (No Man's Land)
+- **Impact**: Completely broken outlier detection - ALL samples flagged as unreliable
+
+**Fix Applied** ✅:
+1. **Graceful Default Handling**: Check if statistics are initialized before classification
+   - If `extreme_embedding_outlier_threshold <= 0`, default to `Normal` (level 0)
+   - Prevents incorrect "No Man's Land" classification
+   - Applied to both fast path (single-sample) and batch path
+
+2. **Persistent Embedding Statistics**: Statistics now saved/loaded with models
+   - **FORMAT_VERSION bumped to 2** (backward compatible)
+   - Saves: mean, std, min, max, p95, p99, median, outlier thresholds
+   - Old model files (v1) still work - statistics recalculated on load if needed
+
+**Verification** ✅:
+- All 17 unit tests passing
+- Save/load tests verified
+- Demo runs successfully
+- Backward compatible with old model files
+
+**Code Changes**:
+- `uwot_transform.cpp`: Added uninitialized stats check (lines 284, 747)
+- `uwot_persistence.cpp`: FORMAT_VERSION 2, save/load embedding stats
+- `uwot_simple_wrapper.h`: Version string updated to "3.42.3"
+- `UMapModel.cs`: Expected version updated to "3.42.3"
+
+---
+
+## 🎉 Previous Release: v3.42.2 (2024-12-25)
 
 ### ✅ Production-Ready Single-Sample TransformWithSafety
 
